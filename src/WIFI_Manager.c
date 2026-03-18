@@ -6,8 +6,8 @@
 // const char *ssid = "55 HOME";
 // const char *pass = "bienvenidos55";
 
-const char *ssid = "POCO";
-const char *pass = "12345678";
+const char *ssid = "Ivon";
+const char *pass = "qwerty0987";
 
 const bool allow_to_reconnect = true;
 bool wifi_connected_flag = false;
@@ -112,18 +112,20 @@ void  post_data(void *pvParameter)
 
     WIFI_Connect();
 
-    while(true)
-    {
-        if(wifi_connected_flag){
-            esp_http_client_config_t config = {
-            .url = "https://joshingly-thermotaxic-trudie.ngrok-free.dev/telemetry",
-            .transport_type = HTTP_TRANSPORT_OVER_SSL,
-            .skip_cert_common_name_check = true,
+    esp_http_client_config_t config = {
+            //.url = "https://joshingly-thermotaxic-trudie.ngrok-free.dev/telemetry",
+            //.host = "elyos-telemetry-exylp.ondigitalocean.app",
+            .url = "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/lectures",
+            //.transport_type = HTTP_TRANSPORT_OVER_SSL,
+            //.skip_cert_common_name_check = true,
             .crt_bundle_attach = esp_crt_bundle_attach,
             };
 
-            esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_handle_t client = esp_http_client_init(&config);
 
+    while(true)
+    {
+        if(wifi_connected_flag){
             char post_data[1024];
 
             // Take mutex and access telemetry data
@@ -181,6 +183,7 @@ void  post_data(void *pvParameter)
             esp_http_client_set_header(client, "Content-Type", "application/json");
 
             esp_err_t err = esp_http_client_perform(client);
+            ESP_LOGI("HTTP", "Status = %d", esp_http_client_get_status_code(client));
 
             if (err == ESP_OK) {
                 ESP_LOGI("HTTP", "Telemetry sent");
@@ -188,9 +191,185 @@ void  post_data(void *pvParameter)
                 ESP_LOGE("HTTP", "POST failed: %s", esp_err_to_name(err));
             }
 
-            esp_http_client_cleanup(client);
         }
         vTaskDelay(pdMS_TO_TICKS(500));
     }
+
+    esp_http_client_cleanup(client);
     vTaskDelete(NULL);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+static esp_err_t http_event_handler_collect(esp_http_client_event_t *evt)
+{
+    http_resp_buf_t *resp = (http_resp_buf_t *)evt->user_data;
+
+    if (resp == NULL) {
+        return ESP_OK;
+    }
+
+    switch (evt->event_id) {
+        case HTTP_EVENT_ON_DATA:
+            if (evt->data != NULL && evt->data_len > 0) {
+                size_t copy_len = (size_t)evt->data_len;
+
+                if (resp->len + copy_len >= resp->max_len) {
+                    copy_len = resp->max_len - resp->len - 1;
+                }
+
+                if (copy_len > 0) {
+                    memcpy(resp->buffer + resp->len, evt->data, copy_len);
+                    resp->len += copy_len;
+                    resp->buffer[resp->len] = '\0';
+                }
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    return ESP_OK;
+}
+
+/* =========================================================
+   HTTP GET helper
+   ========================================================= */
+static esp_err_t http_get_to_buffer(const char *url, char *rx_buffer, size_t rx_buffer_size, int *http_status)
+{
+    if (url == NULL || rx_buffer == NULL || rx_buffer_size == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    rx_buffer[0] = '\0';
+
+    if (http_status != NULL) {
+        *http_status = 0;
+    }
+
+    http_resp_buf_t resp = {
+        .buffer = rx_buffer,
+        .max_len = rx_buffer_size,
+        .len = 0
+    };
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .timeout_ms = 3000,
+        .event_handler = http_event_handler_collect,
+        .user_data = &resp,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == NULL) {
+        return ESP_FAIL;
+    }
+
+    esp_http_client_set_method(client, HTTP_METHOD_GET);
+    esp_http_client_set_header(client, "Accept", "application/json");
+
+    esp_err_t err = esp_http_client_perform(client);
+
+    int status_code = esp_http_client_get_status_code(client);
+    int content_length = esp_http_client_get_content_length(client);
+    bool is_chunked = esp_http_client_is_chunked_response(client);
+
+    if (http_status != NULL) {
+        *http_status = status_code;
+    }
+
+    ESP_LOGI("HTTP_GET", "status=%d content_length=%d chunked=%d body=%s",
+             status_code, content_length, is_chunked, rx_buffer);
+
+    esp_http_client_cleanup(client);
+    return err;
+}
+
+
+/* =========================================================
+   Polling tasks
+   ========================================================= */
+void poll_status_task(void *pvParameter)
+{
+    (void)pvParameter;
+
+    char rx_buffer[HTTP_RX_BUFFER_SIZE];
+    bool parsed_is_running = false;
+
+    while (true) {
+        if (wifi_connected_flag) {
+            int http_status = 0;
+            esp_err_t err = http_get_to_buffer(STATUS_URL, rx_buffer, sizeof(rx_buffer), &http_status);
+
+            if (err == ESP_OK) {
+                if (http_status == 200) {
+                    ESP_LOGI("STATUS", "Raw payload: %s", rx_buffer);
+                    if (json_extract_is_running(rx_buffer, &parsed_is_running)) {
+                        update_status_flag_if_changed(parsed_is_running);
+                    } else {
+                        ESP_LOGW("STATUS", "Invalid JSON payload: %s", rx_buffer);
+                    }
+                } else {
+                    ESP_LOGW("STATUS", "HTTP status = %d", http_status);
+                }
+            } else {
+                ESP_LOGE("STATUS", "GET failed: %s", esp_err_to_name(err));
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
+
+void poll_message_task(void *pvParameter)
+{
+    (void)pvParameter;
+
+    char rx_buffer[HTTP_RX_BUFFER_SIZE];
+    char received_message[CUSTOM_MSG_MAX_LEN + 1];
+
+    while (true) {
+        if (wifi_connected_flag) {
+            int http_status = 0;
+            esp_err_t err = http_get_to_buffer(MESSAGE_URL, rx_buffer, sizeof(rx_buffer), &http_status);
+
+            if (err == ESP_OK) {
+                if (http_status == 200) {
+                    memset(received_message, 0, sizeof(received_message));
+                    ESP_LOGI("MESSAGE", "Raw payload: %s", rx_buffer);
+
+                    if (json_extract_message(rx_buffer, received_message, sizeof(received_message))) {
+                        char *msg_ptr = received_message;
+                        trim_leading_spaces(&msg_ptr);
+
+                        if (msg_ptr[0] == '/') {
+                            (void)execute_command_from_message(msg_ptr);
+                        } else if (msg_ptr[0] != '\0') {
+                            store_display_message_if_new(msg_ptr);
+                        }
+                    } else {
+                        ESP_LOGW("MESSAGE", "Invalid JSON payload: %s", rx_buffer);
+                    }
+                } else {
+                    ESP_LOGW("MESSAGE", "HTTP status = %d", http_status);
+                }
+            } else {
+                ESP_LOGE("MESSAGE", "GET failed: %s", esp_err_to_name(err));
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1500));
+    }
 }

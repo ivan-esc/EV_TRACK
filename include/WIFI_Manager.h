@@ -49,3 +49,17 @@ void post_data(void *);
  * @brief Connects the ESP to a WiFi network with a given SSID and password
  */
 void WIFI_Connect(void);
+
+#include "Display_Helpers.h"
+
+#define STATUS_URL  "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/record/status"
+#define MESSAGE_URL "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/record/message"
+
+void poll_status_task(void *pvParameter);
+void poll_message_task(void *pvParameter);
+
+typedef struct {
+    char *buffer;
+    size_t max_len;
+    size_t len;
+} http_resp_buf_t;

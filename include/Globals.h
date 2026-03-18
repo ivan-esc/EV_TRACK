@@ -108,4 +108,29 @@ extern TelemetryData telemetry_data;
 extern SemaphoreHandle_t telemetry_mutex;
 extern SemaphoreHandle_t i2c_mutex;
 
+/*-------------- DISPLAY EXTRA DATA -------------*/
+/*-----------  Webpage string parsing -----------*/
+#define CUSTOM_MSG_MAX_LEN 100
+#define CHAR_LEN (CUSTOM_MSG_MAX_LEN+1)
+#define HTTP_RX_BUFFER_SIZE     256
+#define MAX_CMD_TOKENS          5
+#define CUSTOM_CHUNK_SIZE 6
+#define CUSTOM_MAX_FRAMES ((CUSTOM_MSG_MAX_LEN + CUSTOM_CHUNK_SIZE - 1) / CUSTOM_CHUNK_SIZE)
+
+typedef struct {
+    uint8_t brightness;
+    uint8_t att_flag;
+    uint8_t lap_count;
+    uint8_t gauge_unit;
+    uint8_t map_zoom;
+    uint8_t map_persp;
+    uint8_t map_arrowpx;
+    float wttg_demand;
+    float wttg_base;
+    float wttg_max;
+    char custom_msg[CHAR_LEN];
+} DisplayData;
+extern DisplayData display_data;
+extern SemaphoreHandle_t display_mutex;
+
 #endif /* GLOBALS_H */
