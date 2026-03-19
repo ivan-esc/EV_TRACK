@@ -55,6 +55,7 @@ void telemetry_send_periodic_CAN(void *arg);
 //Event sent tasks
 void brightness_send_event_CAN(uint8_t value);
 void watt_range_send_event_CAN(float value1, float value2);
+void map_aesthetic_send_event_CAN(uint8_t set_zoom,uint8_t set_perspective, uint8_t arrow_size);
 void add_poi_send_event_CAN(uint8_t id, uint8_t color, double lat, double lon);
 void new_message_send_event_CAN();
 

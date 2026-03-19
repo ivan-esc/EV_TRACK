@@ -206,17 +206,28 @@ void telemetry_send_periodic_CAN(void *arg){
 /* ------------------------------------------- */
 
 void brightness_send_event_CAN(uint8_t value){
+    display_data.brightness = value;
     can_queue_max_brightness(DISP_MAX_BRIGHTNESS,
                             display_data.brightness);
 }
 
 void watt_range_send_event_CAN(float value1, float value2){
+    display_data.wttg_base = value1;
+    display_data.wttg_max = value2;
     can_queue_watt_range(DISP_SET_BASE_POWER,
                         display_data.wttg_base,
                         display_data.wttg_max);
 }
 
-
+void map_aesthetic_send_event_CAN(uint8_t set_zoom,uint8_t set_perspective, uint8_t arrow_size){
+    display_data.map_zoom = set_zoom;
+    display_data.map_persp = set_perspective;
+    display_data.map_arrowpx = arrow_size;
+    can_queue_map_aesthetic(MAP_SET_VIEW,
+                            display_data.map_zoom,
+                            display_data.map_persp,
+                            display_data.map_arrowpx);
+}
 
 void new_message_send_event_CAN(void){
     char msg_copy[CUSTOM_MSG_MAX_LEN + 1];

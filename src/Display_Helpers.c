@@ -302,8 +302,7 @@ bool execute_command_from_message(const char *message)
     CommandId cmd = identify_command(argv[0]);
 
     switch (cmd) {
-        case CMD_BRIGHTNESS:
-        {
+        case CMD_BRIGHTNESS:{
             if (argc != 2) {
                 ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
@@ -317,8 +316,7 @@ bool execute_command_from_message(const char *message)
             return true;
         }
 
-        case CMD_WATT_RANGE:
-        {
+        case CMD_WATT_RANGE:{
             if (argc != 3) {
                 ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
