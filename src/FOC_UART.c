@@ -175,7 +175,7 @@ bool foc_uart_receive_reply(foc_uart_cmd_t expected_cmd,
 
 bool foc_uart_get_all_fast(foc_all_fast_t *out)
 {
-    uint8_t pl[16];
+    uint8_t pl[18];
     uint8_t len;
 
     if (!foc_uart_send_cmd(FOC_CMD_GET_ALL_FAST, NULL, 0))
@@ -188,6 +188,7 @@ bool foc_uart_get_all_fast(foc_all_fast_t *out)
         return false;
 
     memcpy(out, pl, 14);
+    ESP_LOGI("FOC", "FAST struct size = %d", sizeof(foc_all_fast_t));
     return true;
 }
 

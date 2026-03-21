@@ -137,16 +137,16 @@ static void bno055_task(void *arg)
 
         if (ok_acc)
         {
-            telem->accel_x = acc[0];   // m/s²
-            telem->accel_y = acc[1];
-            telem->accel_z = acc[2];
+            telem->accel_x = acc[2];   // m/s²
+            telem->accel_y = acc[0];
+            telem->accel_z = acc[1];
         }
 
         if (ok_ori)
         {
-            telem->orient_x = euler[0];   // degrees
+            telem->orient_x = euler[2];   // degrees
             telem->orient_y = euler[1];
-            telem->orient_z = euler[2];
+            telem->orient_z = euler[0];
         }
 
         // Update temperature

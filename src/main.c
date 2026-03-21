@@ -76,5 +76,5 @@ void app_main(void)
 
     // Debugging
     xTaskCreate(status_LED_task, "status_LED", 2048, NULL, 20, NULL);
-    xTaskCreate(telemetry_print_task, "telemetry_print_task", 4096, NULL, 1, NULL);
+    //xTaskCreate(telemetry_print_task, "telemetry_print_task", 4096, NULL, 1, NULL);
 }
