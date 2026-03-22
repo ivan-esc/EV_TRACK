@@ -7,6 +7,7 @@
 #include "freertos/timers.h"
 #include "driver/sdspi_host.h"
 #include "driver/spi_common.h"
+#include "math.h"
 #include "BNO055.h"
 
 #include "string.h"

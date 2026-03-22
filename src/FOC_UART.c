@@ -13,7 +13,7 @@ static uint8_t crc8_atm(const uint8_t *data, uint8_t len)
         for (uint8_t b = 0; b < 8; b++)
         {
             if (crc & 0x80)
-                crc = (crc << 1) ^ 0x07;
+                crc = (crc << 1 ) ^ 0x07;
             else
                 crc <<= 1;
         }
@@ -328,17 +328,11 @@ bool foc_uart_set_id_pi_gains(int32_t kp, int32_t ki, uint8_t *result)
 }
 
 
-/////////// TESTING //////////
-
 static const char *TAG = "FOC_TEST";
 
 void foc_uart_test_task(void *arg)
 {
-    foc_status_t status;
     foc_all_fast_t fast;
-
-    uint8_t pi_result;
-
     TelemetryData *data = (TelemetryData *)arg;
 
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -347,66 +341,63 @@ void foc_uart_test_task(void *arg)
 
     while (1)
     {
-        /* Always flush before a new request */
-        // uart_flush_input(FOC_DRIVER_UART_CHANNEL);
-
-        /* ---------- STATUS ---------- */
-        // if (foc_uart_get_status(&status))
-        // {
-        //     ESP_LOGI(TAG,
-        //              "STATUS: state=%u  fault=0x%04X",
-        //              status.state,
-        //              status.fault_flags);
-        // }
-        // else
-        // {
-        //     ESP_LOGW(TAG, "GET_STATUS failed");
-        // }
-
-        // vTaskDelay(pdMS_TO_TICKS(20));
-
-        // uart_flush_input(FOC_DRIVER_UART_CHANNEL);
-
-        /* ---------- FAST TELEMETRY ---------- */
         if (foc_uart_get_all_fast(&fast))
         {
-            // ESP_LOGI(TAG,
-            //          "FAST: Vbus=%u mV  Ibus=%ld mA  rpm=%ld  fault=0x%04X",
-            //          fast.vbus_mV,
-            //          (long)fast.ibus_mA,
-            //          (long)fast.rpm,
-            //          fast.fault_flags);
-            
+            float current_A = fast.ibus_mA / 1000.0f;
+            int32_t rpm     = fast.rpm;
+
+            /* ---------- TELEMETRY UPDATE ---------- */
             xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
             data->battery_voltage = fast.vbus_mV / 1000.0f;
-            data->current_amps = fast.ibus_mA / 1000.0f;
-            data->rpms = fast.rpm;
-            data->throttle_raw = fast.throttle_raw;
+            data->current_amps    = current_A;
+            data->rpms            = rpm;
+            data->throttle_raw    = fast.throttle_raw;
             xSemaphoreGive(telemetry_mutex);
-        }
-        // else
-        // {
-        //     ESP_LOGW(TAG, "GET_ALL_FAST failed");
-        // }
 
-        /*
-         * Optional test:
-         * Try sending PI gains once when controller is idle.
-         * Comment this out once you confirm it works.
-         */
-#if 0
-        uart_flush_input(FOC_DRIVER_UART_CHANNEL);
+            /* ---------- KALMAN VELOCITY UPDATE ---------- */
 
-        if (foc_uart_set_iq_pi_gains(10000, 500, &pi_result))
-        {
-            ESP_LOGI(TAG, "SET_IQ_PI_GAINS result = %u", pi_result);
-        }
-        else
-        {
-            ESP_LOGW(TAG, "SET_IQ_PI_GAINS failed");
-        }
-#endif
+            kf_msg_t msg;
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+            /* ===== CASE 1: VEHICLE STOP ===== */
+            if (abs(rpm) < RPM_ZERO_THRESHOLD)
+            {
+                kf.X[2] = 0.0f;
+                kf.X[3] = 0.0f;
+
+                kf.P[2][2] = 0.001f;
+                kf.P[3][3] = 0.001f;
+
+                
+                msg.type = KF_MEAS_VEL;
+                msg.a = 0.0f;
+                msg.b = 0.0f;
+                xQueueSend(kf_queue, &msg, 0);
+            }
+            else
+            {
+                /* ===== CASE 2: VALID CURRENT ===== */
+                if (fabs(current_A) > CURRENT_VALID_THRESHOLD)
+                {
+                    float omega = (rpm * TWO_PI) / 60.0f;
+                    float v = omega * WHEEL_RADIUS_M;
+
+                    float heading;
+
+                    /* ---------- THREAD SAFE READ ---------- */
+                    heading = kf.X[4];
+
+                    float vx = v * cosf(heading);
+                    float vy = v * sinf(heading);
+
+                    msg.type = KF_MEAS_VEL;
+                    msg.a = vx;
+                    msg.b = vy;
+
+                    xQueueSend(kf_queue, &msg, 0);
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

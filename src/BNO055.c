@@ -215,16 +215,18 @@ esp_err_t bno055_begin_i2c(bno055_opmode_t mode)
     if (err != ESP_OK)
         return err;
 
+    vTaskDelay(pdMS_TO_TICKS(10));
+
     // Initialize NVS
-    err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        // NVS partition was truncated and needs to be erased
-        // Retry nvs_flash_init
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
+    // err = nvs_flash_init();
+    // if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    // {
+    //     // NVS partition was truncated and needs to be erased
+    //     // Retry nvs_flash_init
+    //     ESP_ERROR_CHECK(nvs_flash_erase());
+    //     err = nvs_flash_init();
+    // }
+    // ESP_ERROR_CHECK(err);
 
     return err;
 }
@@ -330,28 +332,51 @@ esp_err_t calibrate_sensor_from_saved_profile(void)
     uint8_t calib_data[NUM_BNO055_OFFSET_REGISTERS];
     memset(calib_data, 0, 22);
     esp_err_t err = get_calib_profile_from_nvs(calib_data);
-    switch (err)
-    {
-    case ESP_OK:
-        err = set_sensor_offset(calib_data);
-        printf("check if isFullyCalibrated is true after updating sensor ofsets.....\nisFullyCalibrated:  ");
-        uint8_t count = 0;
-        while (!isFullyCalibrated() && count < 100)
-        {
-            printf("not calibrated\n");
-            count++;
-            vTaskDelay(pdMS_TO_TICKS(500));
-        }
+    // switch (err)
+    // {
+    // case ESP_OK:
+    //     err = set_sensor_offset(calib_data);
+    //     printf("check if isFullyCalibrated is true after updating sensor ofsets.....\nisFullyCalibrated:  ");
+    //     uint8_t count = 0;
+    //     while (!isFullyCalibrated() && count < 100)
+    //     {
+    //         printf("not calibrated\n");
+    //         count++;
+    //         vTaskDelay(pdMS_TO_TICKS(500));
+    //     }
 
-        printf((isFullyCalibrated()) ? "True!\n" : "False\n");
-        break;
-    case ESP_ERR_NVS_NOT_FOUND:
-        printf("No profile saved yet!\n");
-        break;
-    default:
-        printf("Error reading calibration profile\n");
+    //     printf((isFullyCalibrated()) ? "True!\n" : "False\n");
+    //     break;
+    // case ESP_ERR_NVS_NOT_FOUND:
+    //     printf("No profile saved yet!\n");
+    //     break;
+    // default:
+    //     printf("Error reading calibration profile\n");
+    // }
+    // return err;
+
+    if (err == ESP_OK)
+    {
+        ESP_LOGI(TAG, "Applying calibration from NVS");
+
+        err = set_sensor_offset(calib_data);
+
+        if (err == ESP_OK)
+        {
+            ESP_LOGI(TAG, "Offsets applied successfully");
+        }
     }
+    else if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        ESP_LOGW(TAG, "No calibration profile in NVS");
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Error reading NVS");
+    }
+
     return err;
+
 }
 
 /**

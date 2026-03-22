@@ -474,10 +474,6 @@ bool parse_nmea_sentence(const char *sentence, TelemetryData *out)
     return false;
 }
 
-// Converting to local reference frame (track)
-static gps_origin_t origin;
-
-
 void GPS_parse_task(void *arg)
 {
     TelemetryData *telem = (TelemetryData *)arg;
@@ -490,10 +486,20 @@ void GPS_parse_task(void *arg)
 
     // Kalman filter message
     kf_msg_t msg;
+
     // Set the track origin for local reference frame 
+    static bool origin_set = false;
+    // Converting to local reference frame (track)
+    static gps_origin_t origin;
     gps_set_origin(&origin, ORIGIN_LATITUDE_COORD, ORIGIN_LONGITUDE_COORD);
 
     while (1) {
+
+        if (!origin_set && telem->num_sats >= 4)
+        {
+            gps_set_origin(&origin, telem->latitude, telem->longitude);
+            origin_set = true;
+        }
 
         /* Collect characters until we get a full line */
         while (uart_read_bytes(UART_instance_GPS, &ch, 1, 0) == 1) {
@@ -521,15 +527,21 @@ void GPS_parse_task(void *arg)
 
         /* ------ KALMAN UPDATE ------- */
         // Convert GPS coordinates to relative coordinate plane
-        float x, y;
-        xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
-        gps_to_local_xy(&origin, telemetry_data.latitude, telemetry_data.longitude, &x, &y);
-        xSemaphoreGive(telemetry_mutex);
+        if (origin_set){
+            float x, y;
 
-        msg.type = KF_MEAS_GPS;
-        msg.a = x;
-        msg.b = y;
-        xQueueSendToBack(kf_queue, &msg, 0);
+            xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
+            gps_to_local_xy(&origin,
+                            telemetry_data.latitude,
+                            telemetry_data.longitude,
+                            &x, &y);
+            xSemaphoreGive(telemetry_mutex);
+
+            msg.type = KF_MEAS_GPS;
+            msg.a = x;
+            msg.b = y;
+            xQueueSendToBack(kf_queue, &msg, 0);
+        }
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(1000));
     }

@@ -1,6 +1,8 @@
 #include "PeriphConfig.h"
 #include "bno055.h"
 #include "Kalman2D.h"
+#include "math.h"
+#include "Globals.h"
 
 // Pinout check - https://lastminuteengineers.com/esp32-wroom-32-pinout-reference/
 
@@ -99,68 +101,164 @@ void UART_Config(){
     ESP_ERROR_CHECK(uart_set_pin(FOC_DRIVER_UART_CHANNEL, FOC_DRIVER_TX_GPIO, FOC_DRIVER_RX_GPIO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
 
-
 static void bno055_task(void *arg)
 {
     TelemetryData *telem = (TelemetryData *)arg;
 
     double acc[3];
+    double gyro[3];
     double euler[3];
     int8_t temp;
 
-    ESP_LOGI("BNO055", "Starting BNO055...");
+    kf_msg_t msg;
+
+    static bool kf_heading_initialized = false;
+
+    static float heading_buffer[HEADING_WINDOW];
+    static int heading_idx = 0;
+    static bool heading_buffer_full = false;
 
     esp_err_t err = bno055_begin_i2c(OPERATION_MODE_NDOF);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE("BNO055", "bno055_begin_i2c failed");
+    if (err != ESP_OK){
         vTaskDelete(NULL);
     }
 
-    // Message for kalman filter
-    kf_msg_t msg;
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    /* ----------- LOAD CALIBRATION ----------- */
+    set_opmode(OPERATION_MODE_CONFIG);
+    vTaskDelay(pdMS_TO_TICKS(20));
+
+    calibrate_sensor_from_saved_profile();
+
+    set_opmode(OPERATION_MODE_NDOF);
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    for (int i = 0; i < 10; i++) {
+        double dummy[3];
+        get_vector(VECTOR_EULER, dummy);
+        get_vector(VECTOR_MAGNETOMETER, dummy);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 
     while (1)
     {
-        bool ok_acc  = false;
-        bool ok_ori  = false;
+        bool ok_acc = false;
+        bool ok_gyro = false;
+        bool ok_euler = false;
+
+        float current;
+        xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
+        current = telem->current_amps;
+        xSemaphoreGive(telemetry_mutex);
 
         if (get_vector(VECTOR_LINEARACCEL, acc) == ESP_OK)
             ok_acc = true;
 
+        if (get_vector(VECTOR_GYROSCOPE, gyro) == ESP_OK)
+            ok_gyro = true;
+
         if (get_vector(VECTOR_EULER, euler) == ESP_OK)
-            ok_ori = true;
+            ok_euler = true;
 
         temp = get_temp();
 
-        xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
-
+        /* ---------- ACCEL ---------- */
         if (ok_acc)
         {
-            telem->accel_x = acc[2];   // m/s²
-            telem->accel_y = acc[0];
-            telem->accel_z = acc[1];
+            msg.type = KF_MEAS_ACCEL;
+            msg.a = acc[2];
+            msg.b = acc[0];
+            xQueueSend(kf_queue, &msg, 0);
         }
 
-        if (ok_ori)
+        /* ---------- GYRO ---------- */
+        if (ok_gyro)
         {
-            telem->orient_x = euler[2];   // degrees
-            telem->orient_y = euler[1];
-            telem->orient_z = euler[0];
+            msg.type = KF_MEAS_GYRO;
+            msg.a = gyro[1] * (M_PI / 180.0f);
+            xQueueSend(kf_queue, &msg, 0);
         }
 
-        // Update temperature
-        telem->ambient_temp = (float)temp;
-        xSemaphoreGive(telemetry_mutex);
-        // Kalman control input
-        kf.X[4] = acc[0];
-        kf.X[5] = acc[1];
+        /* ---------- HEADING ---------- */
+        if (ok_euler && ok_gyro)
+        {
+            // ESP_LOGI("IMU_DEBUG",
+            //     "EULER [deg] -> Yaw=%.2f  Roll=%.2f  Pitch=%.2f | "
+            //     "GYRO [deg/s] -> X=%.2f  Y=%.2f  Z=%.2f",
+            //     euler[0], euler[1], euler[2],
+            //     gyro[0], gyro[1], gyro[2]);
+    
+            float heading = euler[0] * (M_PI / 180.0f);
+            float theta_kf = (M_PI/2.0f) - heading;
+
+            // wrap
+            if (theta_kf > M_PI)  theta_kf -= 2*M_PI;
+            if (theta_kf < -M_PI) theta_kf += 2*M_PI;
+
+            float gyro_z = gyro[1] * (M_PI / 180.0f);
+
+            /* -------- BUFFER -------- */
+            heading_buffer[heading_idx++] = heading;
+
+            if (heading_idx >= HEADING_WINDOW)
+            {
+                heading_idx = 0;
+                heading_buffer_full = true;
+            }
+
+            bool reliable = false;
+
+            if (heading_buffer_full)
+            {
+                float mean_sin = 0, mean_cos = 0;
+
+                for (int i = 0; i < HEADING_WINDOW; i++)
+                {
+                    mean_sin += sinf(heading_buffer[i]);
+                    mean_cos += cosf(heading_buffer[i]);
+                }
+
+                mean_sin /= HEADING_WINDOW;
+                mean_cos /= HEADING_WINDOW;
+
+                float variance = 1.0f - sqrtf(mean_sin * mean_sin + mean_cos * mean_cos);
+
+                reliable = (variance < 0.05f) &&
+                           (fabs(gyro_z) < 0.5f) &&
+                           (fabs(current) < CURRENT_VALID_THRESHOLD);
+
+               //ESP_LOGI("HEADING", "var=%f rel=%d", variance, reliable);
+            }
+
+            /* -------- KF INIT -------- */
+            if (!kf_heading_initialized && reliable)
+            {
+                kf.X[4] = theta_kf;
+                kf_heading_initialized = true;
+
+                ESP_LOGI("KF", "Heading initialized: %f rad", heading);
+            }
+
+            /* -------- KF UPDATE -------- */
+            if (reliable)
+            {
+                msg.type = KF_MEAS_HEADING;
+                msg.a = theta_kf;
+                xQueueSend(kf_queue, &msg, 0);
+            }
+
+            /* -------- TELEMETRY -------- */
+            xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
+            telem->orient_x = euler[2]; //roll  - not fed into kalman
+            telem->orient_y = euler[1];  //pitch - not fed into kalman
+            telem->ambient_temp = (float)temp;
+            xSemaphoreGive(telemetry_mutex);
+        }
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-    vTaskDelete(NULL);
 }
-
 
 /** 
  * @brief Configures I2C Buses

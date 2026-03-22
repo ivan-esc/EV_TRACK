@@ -3,13 +3,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "Globals.h"
+#include "Kalman2D.h"
 
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
 #include "driver/gpio.h"
-
+#include "math.h"
 
 /* ---------- protocol constants ---------- */
 
@@ -32,7 +33,6 @@ typedef enum
     FOC_CMD_SET_ID_PI_GAINS     = 0x21
 } foc_uart_cmd_t;
 
-
 /* ---------- data structures ---------- */
 
 typedef struct __attribute__((packed))
@@ -44,16 +44,14 @@ typedef struct __attribute__((packed))
     uint16_t fault_flags;
 } foc_all_fast_t;
 
-
 typedef struct __attribute__((packed))
 {
     uint16_t fault_flags;
     uint8_t  state;
 } foc_status_t;
 
-
-
 /* ---------- API ---------- */
+
 void foc_uart_init(void);
 
 /* low level */
@@ -68,7 +66,6 @@ bool foc_uart_receive_reply(foc_uart_cmd_t expected_cmd,
                             uint32_t timeout_ms);
 
 /* high level helpers */
-
 bool foc_uart_get_all_fast(foc_all_fast_t *out);
 bool foc_uart_get_status(foc_status_t *out);
 
@@ -82,5 +79,5 @@ bool foc_uart_get_id(int16_t *id_mA);
 bool foc_uart_set_iq_pi_gains(int32_t kp, int32_t ki, uint8_t *result);
 bool foc_uart_set_id_pi_gains(int32_t kp, int32_t ki, uint8_t *result);
 
-// Task
+/* Task */
 void foc_uart_test_task(void *arg);

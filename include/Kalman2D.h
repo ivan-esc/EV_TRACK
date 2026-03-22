@@ -20,8 +20,9 @@ typedef enum
 {
     KF_MEAS_ACCEL = 0,
     KF_MEAS_GPS,
-    KF_MEAS_VEL
-
+    KF_MEAS_VEL,
+    KF_MEAS_HEADING,
+    KF_MEAS_GYRO
 } kf_meas_type_t;
 
 /* ---- Message sent to Kalman task ---- */
@@ -39,12 +40,14 @@ extern QueueHandle_t kf_queue;
 
 void kf_init(Kalman2D *kf);
 
-void kf_predict(Kalman2D *kf, float dt);
+//void kf_predict(Kalman2D *kf, float dt);
+//void kf_predict(Kalman2D *kf, float dt, float ax, float ay, float gyro_z);
+void kf_predict(Kalman2D *kf, float dt, float ax, float ay, float gyro_z,float *ax_w_out, float *ay_w_out);
 
 /* Measurements */
 void kf_update_gps(Kalman2D *kf, float x, float y);
 void kf_update_accel(Kalman2D *kf, float ax, float ay);
-void kf_update_velocity(Kalman2D *kf, float vx, float vy);
+void kf_update_velocity(Kalman2D *kf, float vx, float vy, bool R_stopped);
 void kalman_task(void *arg);
 
 #endif /* KALMAN2D_H */

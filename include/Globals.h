@@ -39,7 +39,7 @@
 #define I2C_INSTANCE                  I2C_NUM_0
 #define I2C_SDA                       GPIO_NUM_21
 #define I2C_SCL                       GPIO_NUM_22
-#define I2C_FREQ_HZ                   50000 
+#define I2C_FREQ_HZ                   400000 
 
 // SPI Bus
 #define SPI_MISO_PIN                  GPIO_NUM_19
@@ -92,12 +92,19 @@ typedef struct {
 } TelemetryData;
 
 
-// TRACK VARIABLES 
+// TRACK VARIABLES UNUSED 
 #define SPEEDWAY_TRACK
 
 #ifdef SPEEDWAY_TRACK
-    #define ORIGIN_LONGITUDE_COORD  -86.238859    // Adjust later
+    #define ORIGIN_LONGITUDE_COORD  -86.238859
     #define ORIGIN_LATITUDE_COORD    39.793157
+#endif  
+
+#define FORTALEZA_TRACK
+
+#ifdef FORTALEZA_TRACK
+    #define ORIGIN_LONGITUDE_COORD2  -103.45651
+    #define ORIGIN_LATITUDE_COORD2    20.736650
 #endif  
 
 
@@ -132,5 +139,13 @@ typedef struct {
 } DisplayData;
 extern DisplayData display_data;
 extern SemaphoreHandle_t display_mutex;
+
+// Vehicle Info and Tuning
+#define WHEEL_RADIUS_M   0.48f
+#define TWO_PI           6.28318530718f
+#define CURRENT_VALID_THRESHOLD   1.0f   // A
+#define RPM_ZERO_THRESHOLD       5       // rpm (deadband)
+#define HEADING_WINDOW 20
+
 
 #endif /* GLOBALS_H */
