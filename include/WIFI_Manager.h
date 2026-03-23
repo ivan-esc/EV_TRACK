@@ -63,3 +63,10 @@ typedef struct {
     size_t max_len;
     size_t len;
 } http_resp_buf_t;
+
+typedef struct {
+    esp_http_client_handle_t client;
+    http_resp_buf_t resp;
+    char buffer[HTTP_RX_BUFFER_SIZE];
+    bool initialized;
+} http_client_ctx_t;

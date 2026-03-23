@@ -337,7 +337,7 @@ void foc_uart_test_task(void *arg)
 
     vTaskDelay(pdMS_TO_TICKS(500));
 
-    ESP_LOGI(TAG, "FOC UART test task started");
+    //ESP_LOGI(TAG, "FOC UART test task started");
 
     while (1)
     {

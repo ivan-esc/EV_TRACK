@@ -11,9 +11,8 @@ DisplayData display_data = {
     175, // map_zoom
     45, // map_persp
     30, // map_arrowpx
-    0.0f, // pwr_demand
-    0.0f, // pwr_base
-    100.0f, // pwr_max
+    470.0f, // base_throttle
+    2900.0f, // max_throttle
     {0}   // msg[101]
 };
 
@@ -104,6 +103,39 @@ bool json_extract_is_running(const char *json, bool *is_running)
     }
 
     return false;
+}
+
+bool json_extract_current_lap(const char *json, uint8_t *lap)
+{
+    if (json == NULL || lap == NULL) {
+        return false;
+    }
+
+    const char *key = "\"currentLap\":";
+    const char *start = strstr(json, key);
+    if (start == NULL) {
+        return false;
+    }
+
+    start += strlen(key);
+
+    while (*start == ' ' || *start == '\t') {
+        start++;
+    }
+
+    char *endptr = NULL;
+    long value = strtol(start, &endptr, 10);
+
+    if (start == endptr) {
+        return false;
+    }
+
+    if (value < 0 || value > 255) {
+        return false;
+    }
+
+    *lap = (uint8_t)value;
+    return true;
 }
 
 /* =========================================================
@@ -223,7 +255,7 @@ void store_display_message_if_new(const char *new_msg){
 
     size_t msg_len = strlen(new_msg);
     if (msg_len > CUSTOM_MSG_MAX_LEN) {
-        ESP_LOGW("MESSAGE", "Message too long, ignored: %s", new_msg);
+        //ESP_LOGW("MESSAGE", "Message too long, ignored: %s", new_msg);
         return;
     }
 
@@ -232,7 +264,7 @@ void store_display_message_if_new(const char *new_msg){
     if (strncmp(display_data.custom_msg, new_msg, CUSTOM_MSG_MAX_LEN + 1) != 0) {
         memset(display_data.custom_msg, 0, sizeof(display_data.custom_msg));
         memcpy(display_data.custom_msg, new_msg, msg_len);
-        ESP_LOGI("MESSAGE", "Stored message: %s", display_data.custom_msg);
+        //ESP_LOGI("MESSAGE", "Stored message: %s", display_data.custom_msg);
         should_send = true;
     }
 
@@ -295,7 +327,7 @@ bool execute_command_from_message(const char *message)
     int argc = tokenize_command(local_copy, argv, MAX_CMD_TOKENS);
 
     if (argc <= 0) {
-        ESP_LOGW("CMD", "Unrecognized command: %s", message);
+        //ESP_LOGW("CMD", "Unrecognized command: %s", message);
         return true;
     }
 
@@ -304,12 +336,12 @@ bool execute_command_from_message(const char *message)
     switch (cmd) {
         case CMD_BRIGHTNESS:{
             if (argc != 2) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
             uint8_t value = 0;
             if (!parse_u8_arg(argv[1], &value)) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
             brightness_send_event_CAN(value);
@@ -318,7 +350,7 @@ bool execute_command_from_message(const char *message)
 
         case CMD_WATT_RANGE:{
             if (argc != 3) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
 
@@ -326,12 +358,12 @@ bool execute_command_from_message(const char *message)
             float value2 = 0.0f;
 
             if (!parse_float_arg(argv[1], &value1) || !parse_float_arg(argv[2], &value2)) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
 
             if (!(value1 < value2)) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
 
@@ -342,7 +374,7 @@ bool execute_command_from_message(const char *message)
         case CMD_ADD_POI:
         {
             if (argc != 5) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
 
@@ -355,12 +387,12 @@ bool execute_command_from_message(const char *message)
                 !parse_u8_arg(argv[2], &color) ||
                 !parse_double_arg(argv[3], &lat) ||
                 !parse_double_arg(argv[4], &lon)) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
 
             if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
-                ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
                 return true;
             }
 
@@ -370,7 +402,7 @@ bool execute_command_from_message(const char *message)
 
         case CMD_NONE:
         default:
-            ESP_LOGW("CMD", "Unrecognized command: %s", message);
+            //ESP_LOGW("CMD", "Unrecognized command: %s", message);
             return true;
     }
 }
@@ -385,14 +417,44 @@ void update_status_flag_if_changed(bool is_running)
     xSemaphoreTake(display_mutex, portMAX_DELAY);
 
     if (display_data.att_flag != new_flag) {
+
         uint8_t previous_flag = display_data.att_flag;
         display_data.att_flag = new_flag;
 
         if (previous_flag == 0x00 && new_flag == 0xAA) {
-            ESP_LOGI("STATUS", "Rising edge detected: att_flag 0x00 -> 0xAA");
-        } else if (previous_flag == 0xAA && new_flag == 0x00) {
-            ESP_LOGI("STATUS", "Falling edge detected: att_flag 0xAA -> 0x00");
+            start_send_event_CAN();
+        } 
+        else if (previous_flag == 0xAA && new_flag == 0x00) {
+
+            display_data.lap_count = 0;
+            reset_send_event_CAN();
+
+            xSemaphoreGive(display_mutex);
+
+            lap_count_send_event_CAN(0);
+            return;
         }
+    }
+
+    xSemaphoreGive(display_mutex);
+}
+
+void update_lap_count_if_changed(uint8_t new_lap)
+{
+    xSemaphoreTake(display_mutex, portMAX_DELAY);
+
+    if (display_data.att_flag != 0xAA) {
+        xSemaphoreGive(display_mutex);
+        return;
+    }
+
+    if (display_data.lap_count != new_lap) {
+        display_data.lap_count = new_lap;
+
+        xSemaphoreGive(display_mutex);
+
+        lap_count_send_event_CAN(new_lap);
+        return;
     }
 
     xSemaphoreGive(display_mutex);

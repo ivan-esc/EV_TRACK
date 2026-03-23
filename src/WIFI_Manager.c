@@ -44,19 +44,19 @@ void NVS_Init(void)
 
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
-        ESP_LOGW("NVS", "NVS corrupted or version mismatch, erasing...");
+        //ESP_LOGW("NVS", "NVS corrupted or version mismatch, erasing...");
 
         ESP_ERROR_CHECK(nvs_flash_erase());
         ESP_ERROR_CHECK(nvs_flash_init());
     }
     else if (err != ESP_OK)
     {
-        ESP_LOGE("NVS", "NVS init failed: %d", err);
+        //ESP_LOGE("NVS", "NVS init failed: %d", err);
         ESP_ERROR_CHECK(err);
     }
     else
     {
-        ESP_LOGI("NVS", "NVS initialized successfully");
+        //ESP_LOGI("NVS", "NVS initialized successfully");
     }
 }
 
@@ -64,7 +64,7 @@ void NVS_Init(void)
 void WIFI_Event_Handler(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id, void *event_data){
     switch(event_id){
         case WIFI_EVENT_STA_START:
-            ESP_LOGD("WIFI", "WIFI connecting ...");
+            //ESP_LOGD("WIFI", "WIFI connecting ...");
             break;
 
         case WIFI_EVENT_STA_CONNECTED:
@@ -82,7 +82,7 @@ void WIFI_Event_Handler(void *event_handler_arg, esp_event_base_t event_base, in
             break;
 
         case IP_EVENT_STA_GOT_IP:
-            ESP_LOGI("WIFI", "WIFI got IP address");
+            //ESP_LOGI("WIFI", "WIFI got IP address");
             current_status_code = STATUS_ONLINE;
             wifi_connected_flag = true; 
             break;
@@ -141,13 +141,33 @@ void  post_data(void *pvParameter)
             //.transport_type = HTTP_TRANSPORT_OVER_SSL,
             //.skip_cert_common_name_check = true,
             .crt_bundle_attach = esp_crt_bundle_attach,
+            .keep_alive_enable = true,
             };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
+    bool last_wifi = false;
+
 
     while(true)
     {
         if(wifi_connected_flag){
+
+            if (!last_wifi) {
+
+                if (client != NULL) {
+                    esp_http_client_cleanup(client);
+                    client = NULL;
+                }
+
+                esp_http_client_config_t config = {
+                    .url = "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/lectures",
+                    .crt_bundle_attach = esp_crt_bundle_attach,
+                    .keep_alive_enable = true,
+                };
+
+                client = esp_http_client_init(&config);
+            }
+            
             char post_data[1024];
 
             // Take mutex and access telemetry data
@@ -205,15 +225,16 @@ void  post_data(void *pvParameter)
             esp_http_client_set_header(client, "Content-Type", "application/json");
 
             esp_err_t err = esp_http_client_perform(client);
-            ESP_LOGI("HTTP", "Status = %d", esp_http_client_get_status_code(client));
+            //ESP_LOGI("HTTP", "Status = %d", esp_http_client_get_status_code(client));
 
             if (err == ESP_OK) {
-                ESP_LOGI("HTTP", "Telemetry sent");
+                //ESP_LOGI("HTTP", "Telemetry sent");
             } else {
-                ESP_LOGE("HTTP", "POST failed: %s", esp_err_to_name(err));
+                //ESP_LOGE("HTTP", "POST failed: %s", esp_err_to_name(err));
             }
 
         }
+        last_wifi = wifi_connected_flag;
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
@@ -265,133 +286,138 @@ static esp_err_t http_event_handler_collect(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-/* =========================================================
-   HTTP GET helper
-   ========================================================= */
-static esp_err_t http_get_to_buffer(const char *url, char *rx_buffer, size_t rx_buffer_size, int *http_status)
+/* ========================================================= */
+static void http_client_init_ctx(http_client_ctx_t *ctx, const char *url)
 {
-    if (url == NULL || rx_buffer == NULL || rx_buffer_size == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    memset(ctx, 0, sizeof(*ctx));
 
-    rx_buffer[0] = '\0';
-
-    if (http_status != NULL) {
-        *http_status = 0;
-    }
-
-    http_resp_buf_t resp = {
-        .buffer = rx_buffer,
-        .max_len = rx_buffer_size,
-        .len = 0
-    };
+    ctx->resp.buffer = ctx->buffer;
+    ctx->resp.max_len = sizeof(ctx->buffer);
+    ctx->resp.len = 0;
 
     esp_http_client_config_t config = {
         .url = url,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = 3000,
         .event_handler = http_event_handler_collect,
-        .user_data = &resp,
+        .user_data = &ctx->resp,
+        .keep_alive_enable = true,  
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == NULL) {
-        return ESP_FAIL;
-    }
+    ctx->client = esp_http_client_init(&config);
+    ctx->initialized = true;
+}
 
-    esp_http_client_set_method(client, HTTP_METHOD_GET);
-    esp_http_client_set_header(client, "Accept", "application/json");
+static esp_err_t http_client_perform_ctx(http_client_ctx_t *ctx, int *http_status)
+{
+    ctx->resp.len = 0;
+    ctx->buffer[0] = '\0';
 
-    esp_err_t err = esp_http_client_perform(client);
+    esp_http_client_set_method(ctx->client, HTTP_METHOD_GET);
 
-    int status_code = esp_http_client_get_status_code(client);
-    int content_length = esp_http_client_get_content_length(client);
-    bool is_chunked = esp_http_client_is_chunked_response(client);
+    esp_err_t err = esp_http_client_perform(ctx->client);
 
-    if (http_status != NULL) {
+    int status_code = esp_http_client_get_status_code(ctx->client);
+
+    if (http_status) {
         *http_status = status_code;
     }
 
-    ESP_LOGI("HTTP_GET", "status=%d content_length=%d chunked=%d body=%s",
-             status_code, content_length, is_chunked, rx_buffer);
+    //ESP_LOGI("HTTP_GET", "status=%d body=%s", status_code, ctx->buffer);
 
-    esp_http_client_cleanup(client);
     return err;
 }
-
+   
 
 /* =========================================================
    Polling tasks
    ========================================================= */
 void poll_status_task(void *pvParameter)
 {
-    (void)pvParameter;
+    http_client_ctx_t ctx;
+    http_client_init_ctx(&ctx, STATUS_URL);
 
-    char rx_buffer[HTTP_RX_BUFFER_SIZE];
     bool parsed_is_running = false;
+    bool last_wifi = false;
+
 
     while (true) {
         if (wifi_connected_flag) {
-            int http_status = 0;
-            esp_err_t err = http_get_to_buffer(STATUS_URL, rx_buffer, sizeof(rx_buffer), &http_status);
 
-            if (err == ESP_OK) {
-                if (http_status == 200) {
-                    ESP_LOGI("STATUS", "Raw payload: %s", rx_buffer);
-                    if (json_extract_is_running(rx_buffer, &parsed_is_running)) {
-                        update_status_flag_if_changed(parsed_is_running);
-                    } else {
-                        ESP_LOGW("STATUS", "Invalid JSON payload: %s", rx_buffer);
-                    }
-                } else {
-                    ESP_LOGW("STATUS", "HTTP status = %d", http_status);
+            if (!last_wifi) {
+                esp_http_client_cleanup(ctx.client);
+                http_client_init_ctx(&ctx, STATUS_URL);
+            }
+
+            int http_status = 0;
+
+            esp_err_t err = http_client_perform_ctx(&ctx, &http_status);
+
+            if (err == ESP_OK && http_status == 200) {
+                bool parsed_ok = false;
+
+                if (json_extract_is_running(ctx.buffer, &parsed_is_running)) {
+                    update_status_flag_if_changed(parsed_is_running);
+                    parsed_ok = true;
                 }
-            } else {
-                ESP_LOGE("STATUS", "GET failed: %s", esp_err_to_name(err));
+
+                uint8_t parsed_lap = 0;
+
+                if (json_extract_current_lap(ctx.buffer, &parsed_lap)) {
+                    update_lap_count_if_changed(parsed_lap);
+                    parsed_ok = true;
+                }
+
+                if (!parsed_ok) {
+                    //ESP_LOGW("STATUS", "Invalid JSON payload: %s", ctx.buffer);
+                }
             }
         }
 
+        last_wifi = wifi_connected_flag;
         vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
 
 void poll_message_task(void *pvParameter)
 {
-    (void)pvParameter;
+    http_client_ctx_t ctx;
+    http_client_init_ctx(&ctx, MESSAGE_URL);
 
-    char rx_buffer[HTTP_RX_BUFFER_SIZE];
     char received_message[CUSTOM_MSG_MAX_LEN + 1];
+    bool last_wifi = false;
 
     while (true) {
         if (wifi_connected_flag) {
+
+            if (!last_wifi) {
+                esp_http_client_cleanup(ctx.client);
+                http_client_init_ctx(&ctx, MESSAGE_URL);
+            }
+
             int http_status = 0;
-            esp_err_t err = http_get_to_buffer(MESSAGE_URL, rx_buffer, sizeof(rx_buffer), &http_status);
 
-            if (err == ESP_OK) {
-                if (http_status == 200) {
-                    memset(received_message, 0, sizeof(received_message));
-                    ESP_LOGI("MESSAGE", "Raw payload: %s", rx_buffer);
+            esp_err_t err = http_client_perform_ctx(&ctx, &http_status);
 
-                    if (json_extract_message(rx_buffer, received_message, sizeof(received_message))) {
-                        char *msg_ptr = received_message;
-                        trim_leading_spaces(&msg_ptr);
+            if (err == ESP_OK && http_status == 200) {
 
-                        if (msg_ptr[0] == '/') {
-                            (void)execute_command_from_message(msg_ptr);
-                        } else if (msg_ptr[0] != '\0') {
-                            store_display_message_if_new(msg_ptr);
-                        }
-                    } else {
-                        ESP_LOGW("MESSAGE", "Invalid JSON payload: %s", rx_buffer);
+                memset(received_message, 0, sizeof(received_message));
+
+                if (json_extract_message(ctx.buffer, received_message, sizeof(received_message))) {
+
+                    char *msg_ptr = received_message;
+                    trim_leading_spaces(&msg_ptr);
+
+                    if (msg_ptr[0] == '/') {
+                        execute_command_from_message(msg_ptr);
+                    } else if (msg_ptr[0] != '\0') {
+                        store_display_message_if_new(msg_ptr);
                     }
-                } else {
-                    ESP_LOGW("MESSAGE", "HTTP status = %d", http_status);
                 }
-            } else {
-                ESP_LOGE("MESSAGE", "GET failed: %s", esp_err_to_name(err));
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1500));
+        last_wifi = wifi_connected_flag;
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }

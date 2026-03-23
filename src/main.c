@@ -55,16 +55,16 @@ void app_main(void)
     Peripheral_Config();
 
     // Communication 
-    //xTaskCreatePinnedToCore(foc_uart_test_task, "foc_uart_test_task", 4096, &telemetry_data, 4, NULL, 1);
+    xTaskCreatePinnedToCore(foc_uart_test_task, "foc_uart_test_task", 4096, &telemetry_data, 4, NULL, 1);
     xTaskCreatePinnedToCore(GPS_parse_task, "gps_parse", 4096, &telemetry_data, 5, NULL, 1);
     xTaskCreatePinnedToCore(pitot_task, "pitot_task", 4096, &telemetry_data, 10, NULL, 1);
     //xTaskCreatePinnedToCore(can_tx_task, "can_tx_task", 4096, NULL, 15, NULL, 1);
 
     // Data acquisition 
     xTaskCreate(post_data, "post_data", 8192, &telemetry_data, 5, NULL);
-    //xTaskCreate(SD_manager_task, "SD_manager", 4096, &telemetry_data, 5, NULL);
-    //xTaskCreate(poll_status_task, "poll_status_task", 4096, NULL, 4, NULL);
-    //xTaskCreate(poll_message_task, "poll_message_task", 4096, NULL, 4, NULL);
+    xTaskCreate(SD_manager_task, "SD_manager", 4096, &telemetry_data, 5, NULL);
+    xTaskCreate(poll_status_task, "poll_status_task", 4096, NULL, 4, NULL);
+    xTaskCreate(poll_message_task, "poll_message_task", 4096, NULL, 4, NULL);
 
     //CAN periodic frames
     xTaskCreate(map_data_send_periodic_CAN, "map_data_send_periodic_CAN", 4096, NULL, 1, NULL);
@@ -75,5 +75,5 @@ void app_main(void)
 
     // Debugging
     xTaskCreate(status_LED_task, "status_LED", 2048, NULL, 20, NULL);
-    xTaskCreate(telemetry_print_task, "telemetry_print_task", 4096, NULL, 1, NULL);
+    //xTaskCreate(telemetry_print_task, "telemetry_print_task", 4096, NULL, 1, NULL);
 }

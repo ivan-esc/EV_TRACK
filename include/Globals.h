@@ -132,9 +132,9 @@ typedef struct {
     uint8_t map_zoom;
     uint8_t map_persp;
     uint8_t map_arrowpx;
-    float wttg_demand;
-    float wttg_base;
-    float wttg_max;
+    uint16_t base_throttle;
+    uint16_t max_throttle;
+    uint32_t lap_set_time;
     char custom_msg[CHAR_LEN];
 } DisplayData;
 extern DisplayData display_data;

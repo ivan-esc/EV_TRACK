@@ -9,6 +9,41 @@ QueueHandle_t can_tx_queue = NULL;
 /* ------------- FRAME CODING ---------------- */
 /* ------------------------------------------- */
 
+void can_queue_start_att(uint32_t id){
+    if (can_tx_queue == NULL) return;
+
+    can_frame_t frame;
+    frame.identifier = id;
+    frame.dlc = 4;
+
+    frame.data[0] = display_data.lap_count;
+    
+    xQueueSend(can_tx_queue, &frame, 0);
+}
+
+void can_queue_reset_att(uint32_t id){
+    if (can_tx_queue == NULL) return;
+
+    can_frame_t frame;
+    frame.identifier = id;
+    frame.dlc = 4;
+    frame.data[0] = (uint8_t)0;
+
+    xQueueSend(can_tx_queue, &frame, 0); 
+}
+
+void can_queue_laps(uint32_t id, uint8_t laps){
+    if (can_tx_queue == NULL) return;
+
+    can_frame_t frame;
+    frame.identifier = id;
+    frame.dlc = 4;
+
+    frame.data[0] = laps;
+
+    xQueueSend(can_tx_queue, &frame, 0);
+}
+
 void can_queue_velocity(uint32_t id, float velocity_x, uint16_t rpms){
     if (can_tx_queue == NULL) return;
 
@@ -29,30 +64,31 @@ void can_queue_velocity(uint32_t id, float velocity_x, uint16_t rpms){
     xQueueSend(can_tx_queue, &frame, 0);
 }
 
-void can_queue_watts(uint32_t id, float watts){
+void can_queue_watts(uint32_t id, uint16_t watts){
     if (can_tx_queue == NULL) return;
-    static float last_watts = 0.0f;
-    if (fabsf(watts - last_watts) < 0.01f) return;
+
+    static uint16_t last_watts = 0;
+    if (watts == last_watts) return;   // exact compare is fine for integers
 
     last_watts = watts;
 
     can_frame_t frame;
     frame.identifier = id;
-    frame.dlc = 4;
+    frame.dlc = 2;
 
-    FloatToBytes(watts, &frame.data[0]);
+    U16toBytes(watts, &frame.data[0]);
     xQueueSend(can_tx_queue, &frame, 0);
 }
 
-void can_queue_watt_range(uint32_t id, float range_lower, float range_upper){
+void can_queue_watt_range(uint32_t id, uint16_t range_lower, uint16_t range_upper){
     if (can_tx_queue == NULL) return;
 
     can_frame_t frame;
     frame.identifier = id;
     frame.dlc = 8;
 
-    FloatToBytes(range_lower, &frame.data[0]);
-    FloatToBytes(range_upper, &frame.data[4]);
+    U16toBytes(range_lower, &frame.data[0]);
+    U16toBytes(range_upper, &frame.data[2]);
     xQueueSend(can_tx_queue, &frame, 0);
 }
 
@@ -96,7 +132,7 @@ void can_queue_coords(uint32_t id, double latitude, double longitude){
 void can_queue_heading(uint32_t id, float orient){
     if (can_tx_queue == NULL) return;
     static float last_orient = 0.0f;
-    if (fabsf(orient - last_orient) < 3.0f) return;
+    if (fabsf(orient - last_orient) < 5.0f) return;
 
     can_frame_t frame;
     frame.identifier = id;
@@ -183,9 +219,6 @@ void map_data_send_periodic_CAN(void *arg){
                         telemetry_data.latitude,telemetry_data.longitude);
         can_queue_heading(MAP_SET_HEADING,
                         telemetry_data.orient_z);
-       // can_queue_custom_msg(DISP_MSG_CUSTOM,
-       //                          display_data.msg,
-       //                          false);       
         vTaskDelayUntil(&last, pdMS_TO_TICKS(2500));
     }
 }
@@ -193,10 +226,11 @@ void map_data_send_periodic_CAN(void *arg){
 void telemetry_send_periodic_CAN(void *arg){
     TickType_t last = xTaskGetTickCount();
     while(1){
+        float vel_mag = fabsf(telemetry_data.velocity_x*telemetry_data.velocity_x + telemetry_data.velocity_y*telemetry_data.velocity_y);
         can_queue_velocity(DISP_SEND_RPM,
-                        telemetry_data.velocity_x,telemetry_data.rpms);
+                        vel_mag,telemetry_data.rpms);
         can_queue_watts(DISP_SEND_POWER,
-                        telemetry_data.current_amps);
+                        telemetry_data.throttle_raw);
         vTaskDelayUntil(&last, pdMS_TO_TICKS(100));
     }
 }
@@ -211,12 +245,23 @@ void brightness_send_event_CAN(uint8_t value){
                             display_data.brightness);
 }
 
+void start_send_event_CAN(){
+    can_queue_start_att(DISP_START_ATTEMPT);
+}
+void reset_send_event_CAN(){
+    can_queue_reset_att(DISP_RESET_ALL);
+}
+void lap_count_send_event_CAN(uint8_t new_lap){
+    can_queue_laps(DISP_SET_LAP_INFO, new_lap);
+}
+
+
 void watt_range_send_event_CAN(float value1, float value2){
-    display_data.wttg_base = value1;
-    display_data.wttg_max = value2;
+    display_data.base_throttle = value1;
+    display_data.max_throttle = value2;
     can_queue_watt_range(DISP_SET_BASE_POWER,
-                        display_data.wttg_base,
-                        display_data.wttg_max);
+                        display_data.base_throttle,
+                        display_data.max_throttle);
 }
 
 void map_aesthetic_send_event_CAN(uint8_t set_zoom,uint8_t set_perspective, uint8_t arrow_size){
@@ -228,6 +273,8 @@ void map_aesthetic_send_event_CAN(uint8_t set_zoom,uint8_t set_perspective, uint
                             display_data.map_persp,
                             display_data.map_arrowpx);
 }
+
+
 
 void new_message_send_event_CAN(void){
     char msg_copy[CUSTOM_MSG_MAX_LEN + 1];
