@@ -175,6 +175,19 @@ void  post_data(void *pvParameter)
             // Get timestamp for data
             data->timestamp = telemetry_timestamp_ms();
 
+            // throttle
+            float throttle = (float)data->throttle_raw / 4095.0f; 
+            // float p_bott    = 470.0f;
+            // float p_top     = 2900.0f;
+
+            // float range = p_top - p_bott;
+            // if (range <= 0.0f) range = 1.0f;
+            // float norm = (throttle - p_bott) / range;
+            // if (norm < 0.0f) norm = 0.0f;
+            // if (norm > 1.0f) norm = 1.0f;
+            // float p = norm * 100.0f;
+
+
             snprintf(post_data, sizeof(post_data),
                 "{"
                 "\"timestamp\": %lu, "
@@ -195,7 +208,7 @@ void  post_data(void *pvParameter)
                 "\"altitude_m\": %.2f, "
                 "\"num_sats\": %d, "
                 "\"air_speed\": %.2f, "
-                "\"throttle_raw\": %d"
+                "\"throttle\": %.1f"
                 "}",
                 data->timestamp,
                 data->battery_voltage,
@@ -215,7 +228,7 @@ void  post_data(void *pvParameter)
                 data->altitude_m,
                 data->num_sats,
                 data->air_speed,
-                data->throttle_raw
+                throttle
             );
 
             xSemaphoreGive(telemetry_mutex);

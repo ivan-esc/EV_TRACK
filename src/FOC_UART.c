@@ -398,6 +398,6 @@ void foc_uart_test_task(void *arg)
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

@@ -58,7 +58,7 @@ void app_main(void)
     xTaskCreatePinnedToCore(foc_uart_test_task, "foc_uart_test_task", 4096, &telemetry_data, 4, NULL, 1);
     xTaskCreatePinnedToCore(GPS_parse_task, "gps_parse", 4096, &telemetry_data, 5, NULL, 1);
     xTaskCreatePinnedToCore(pitot_task, "pitot_task", 4096, &telemetry_data, 10, NULL, 1);
-    //xTaskCreatePinnedToCore(can_tx_task, "can_tx_task", 4096, NULL, 15, NULL, 1);
+    xTaskCreatePinnedToCore(can_tx_task, "can_tx_task", 4096, NULL, 15, NULL, 1);
 
     // Data acquisition 
     xTaskCreate(post_data, "post_data", 8192, &telemetry_data, 5, NULL);
