@@ -8,6 +8,11 @@
 #define KF_STATE_DIM 6      // State vector dimension
 #define KF_MEAS_DIM  2      
 
+#define GPS_SPEED_MIN_VALID      1.5f   // m/s (~5.4 km/h)
+#define GPS_SPEED_STATIONARY     0.5f   // below this = stopped
+#define GPS_HEADING_NOISE_R      0.05f
+#define GPS_VEL_NOISE_R          0.1f
+
 typedef struct
 {
     float X[KF_STATE_DIM];                 // state vector
@@ -22,7 +27,9 @@ typedef enum
     KF_MEAS_GPS,
     KF_MEAS_VEL,
     KF_MEAS_HEADING,
-    KF_MEAS_GYRO
+    KF_MEAS_GYRO,
+    KF_MEAS_GPS_VEL,
+    KF_MEAS_HEADING_GPS
 } kf_meas_type_t;
 
 /* ---- Message sent to Kalman task ---- */
@@ -48,6 +55,9 @@ void kf_predict(Kalman2D *kf, float dt, float ax, float ay, float gyro_z,float *
 void kf_update_gps(Kalman2D *kf, float x, float y);
 void kf_update_accel(Kalman2D *kf, float ax, float ay);
 void kf_update_velocity(Kalman2D *kf, float vx, float vy, bool R_stopped);
+void kf_update_gps_velocity(Kalman2D *kf, float vx, float vy, float speed);
+void kf_update_heading_gps(Kalman2D *kf, float heading, float speed);
+
 void kalman_task(void *arg);
 
 #endif /* KALMAN2D_H */

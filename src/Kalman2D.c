@@ -123,6 +123,26 @@ void kf_update_velocity(Kalman2D *kf, float vx, float vy, bool R_stopped)
 }
 
 /* ---------- HEADING (MAG) ---------- */
+// void kf_update_heading(Kalman2D *kf, float heading)
+// {
+//     float y = heading - kf->X[4];
+
+//     while (y > M_PI) y -= 2*M_PI;
+//     while (y < -M_PI) y += 2*M_PI;
+
+//     float S = kf->P[4][4] + 0.1f;
+
+//     float K[6];
+//     for(int i=0;i<6;i++)
+//         K[i] = kf->P[i][4] / S;
+
+//     for(int i=0;i<6;i++)
+//         kf->X[i] += K[i] * y;
+
+//     for(int i=0;i<6;i++)
+//         for(int j=0;j<6;j++)
+//             kf->P[i][j] -= K[i] * kf->P[4][j];
+// }
 void kf_update_heading(Kalman2D *kf, float heading)
 {
     float y = heading - kf->X[4];
@@ -130,7 +150,48 @@ void kf_update_heading(Kalman2D *kf, float heading)
     while (y > M_PI) y -= 2*M_PI;
     while (y < -M_PI) y += 2*M_PI;
 
-    float S = kf->P[4][4] + 0.1f;
+    float R = 0.3f; // increased (less trust than GPS)
+
+    float S = kf->P[4][4] + R;
+
+    float K[6];
+    for(int i=0;i<6;i++)
+        K[i] = kf->P[i][4] / S;
+
+    for(int i=0;i<6;i++)
+        kf->X[i] += K[i] * y;
+
+    for(int i=0;i<6;i++)
+        for(int j=0;j<6;j++)
+            kf->P[i][j] -= K[i] * kf->P[4][j];
+}
+
+void kf_update_gps_velocity(Kalman2D *kf, float vx, float vy, float speed)
+{
+    // Reject GPS velocity if too slow (noise region)
+    if (speed < GPS_SPEED_MIN_VALID)
+        return;
+
+    float R = GPS_VEL_NOISE_R;
+
+    kf_update_generic(kf, vx, 2, R);
+    kf_update_generic(kf, vy, 3, R);
+}
+
+void kf_update_heading_gps(Kalman2D *kf, float heading, float speed)
+{
+    // Only trust GPS heading if moving fast enough
+    if (speed < GPS_SPEED_MIN_VALID)
+        return;
+
+    float y = heading - kf->X[4];
+
+    while (y > M_PI) y -= 2*M_PI;
+    while (y < -M_PI) y += 2*M_PI;
+
+    float R = GPS_HEADING_NOISE_R;
+
+    float S = kf->P[4][4] + R;
 
     float K[6];
     for(int i=0;i<6;i++)
@@ -151,11 +212,14 @@ void kalman_task(void *arg)
     const TickType_t period = pdMS_TO_TICKS(10);
 
     float ax = 0, ay = 0, gyro_z = 0;
+    float gps_speed = 0.0f;
 
     while (1)
     {
         kf_msg_t msg;
-        bool vehicle_stopped = (fabs(kf.X[2]) < 0.2f && fabs(kf.X[3]) < 0.2f);
+        //bool vehicle_stopped = (fabs(kf.X[2]) < 0.2f && fabs(kf.X[3]) < 0.2f);
+        //bool vehicle_stopped = (gps_speed < GPS_SPEED_STATIONARY);
+
 
         while (xQueueReceive(kf_queue, &msg, 0) == pdTRUE)
         {
@@ -174,19 +238,23 @@ void kalman_task(void *arg)
                     kf_update_gps(&kf, msg.a, msg.b);
                     break;
 
+                case KF_MEAS_GPS_VEL:
+                    gps_speed = sqrtf(msg.a*msg.a + msg.b*msg.b);
+                    kf_update_gps_velocity(&kf, msg.a, msg.b, gps_speed);
+                    break;
+
+                case KF_MEAS_HEADING_GPS:
+                    kf_update_heading_gps(&kf, msg.a, gps_speed);
+                    break;
+
                 case KF_MEAS_VEL:
-                    kf_update_velocity(&kf, msg.a, msg.b, vehicle_stopped);
+                    kf_update_velocity(&kf, msg.a, msg.b, false);
                     break;
 
                 case KF_MEAS_HEADING:
                     kf_update_heading(&kf, msg.a);
                     break;
             }
-        }
-
-        if (vehicle_stopped){
-            ax = 0.0f;
-            ay = 0.0f;
         }
 
         // Predict AFTER consuming inputs

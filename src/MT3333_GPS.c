@@ -1,6 +1,7 @@
 #include "MT3333_GPS.h"
 #include "GPS_local.h"
 #include "Kalman2D.h"
+#include "math.h"
 
 char PMTK_command_buff[256];
 char aux_buff[128];
@@ -342,6 +343,70 @@ static double nmea_degmin_to_decimal(double v)
 }
 
 
+// static bool parse_gprmc_sentence(const char *sentence, TelemetryData *out)
+// {
+//     char buf[128];
+//     strncpy(buf, sentence, sizeof(buf));
+//     buf[sizeof(buf) - 1] = 0;
+
+//     char *token;
+//     int field = 0;
+
+//     char *status  = NULL;
+//     char *lat_str = NULL;
+//     char *lat_dir = NULL;
+//     char *lon_str = NULL;
+//     char *lon_dir = NULL;
+
+//     token = strtok(buf, ",");
+
+//     while (token) {
+
+//         switch (field) {
+//             case 2: status  = token; break;
+//             case 3: lat_str = token; break;
+//             case 4: lat_dir = token; break;
+//             case 5: lon_str = token; break;
+//             case 6: lon_dir = token; break;
+//             default: break;
+//         }
+
+//         token = strtok(NULL, ",");
+//         field++;
+//     }
+
+//     if (!status) {
+//         GPS_fix_status = false;   // Update global flag
+//         return false;
+//     }
+
+//     /* Store fix status */
+//     GPS_fix_status = (status[0] == 'A');
+
+//     /* If no valid fix, do not update position */
+//     if (!GPS_fix_status){
+//         return false;
+//     }
+
+//     if (!lat_str || !lat_dir || !lon_str || !lon_dir){
+//         return false;
+//     }
+
+//     double lat_raw = atof(lat_str);
+//     double lon_raw = atof(lon_str);
+
+//     double lat = nmea_degmin_to_decimal(lat_raw);
+//     double lon = nmea_degmin_to_decimal(lon_raw);
+
+//     if (lat_dir[0] == 'S') lat = -lat;
+//     if (lon_dir[0] == 'W') lon = -lon;
+
+//     out->latitude  = lat;
+//     out->longitude = lon;
+
+//     return true;
+// }
+
 static bool parse_gprmc_sentence(const char *sentence, TelemetryData *out)
 {
     char buf[128];
@@ -356,40 +421,35 @@ static bool parse_gprmc_sentence(const char *sentence, TelemetryData *out)
     char *lat_dir = NULL;
     char *lon_str = NULL;
     char *lon_dir = NULL;
+    char *speed_str = NULL;
+    char *course_str = NULL;
 
     token = strtok(buf, ",");
 
     while (token) {
-
         switch (field) {
-            case 2: status  = token; break;
-            case 3: lat_str = token; break;
-            case 4: lat_dir = token; break;
-            case 5: lon_str = token; break;
-            case 6: lon_dir = token; break;
-            default: break;
+            case 2: status      = token; break;
+            case 3: lat_str     = token; break;
+            case 4: lat_dir     = token; break;
+            case 5: lon_str     = token; break;
+            case 6: lon_dir     = token; break;
+            case 7: speed_str   = token; break; // knots
+            case 8: course_str  = token; break; // degrees
         }
-
         token = strtok(NULL, ",");
         field++;
     }
 
     if (!status) {
-        GPS_fix_status = false;   // Update global flag
+        GPS_fix_status = false;
         return false;
     }
 
-    /* Store fix status */
     GPS_fix_status = (status[0] == 'A');
+    if (!GPS_fix_status) return false;
 
-    /* If no valid fix, do not update position */
-    if (!GPS_fix_status){
+    if (!lat_str || !lat_dir || !lon_str || !lon_dir)
         return false;
-    }
-
-    if (!lat_str || !lat_dir || !lon_str || !lon_dir){
-        return false;
-    }
 
     double lat_raw = atof(lat_str);
     double lon_raw = atof(lon_str);
@@ -402,6 +462,20 @@ static bool parse_gprmc_sentence(const char *sentence, TelemetryData *out)
 
     out->latitude  = lat;
     out->longitude = lon;
+
+    /* ---- SPEED + HEADING ---- */
+    if (speed_str && course_str)
+    {
+        float speed_knots = atof(speed_str);
+        float course_deg  = atof(course_str);
+
+        float speed_mps = speed_knots * 0.514444f;
+
+        float heading_rad = course_deg * M_PI / 180.0f;
+
+        out->velocity_x = speed_mps * cosf(heading_rad); // EAST
+        out->velocity_y = speed_mps * sinf(heading_rad); // NORTH
+    }
 
     return true;
 }
@@ -542,6 +616,33 @@ void GPS_parse_task(void *arg)
             msg.a = x;
             msg.b = y;
             xQueueSendToBack(kf_queue, &msg, 0);
+
+            /* -------- GPS VELOCITY + HEADING -------- */
+            float vx, vy;
+
+            xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
+            vx = telemetry_data.velocity_x;
+            vy = telemetry_data.velocity_y;
+            xSemaphoreGive(telemetry_mutex);
+
+            float speed = sqrtf(vx*vx + vy*vy);
+
+            /* Reject low-speed noise */
+            if (speed > GPS_SPEED_MIN_VALID)
+            {
+                /* VELOCITY */
+                msg.type = KF_MEAS_GPS_VEL;
+                msg.a = vx;
+                msg.b = vy;
+                xQueueSendToBack(kf_queue, &msg, 0);
+
+                /* HEADING */
+                float heading = atan2f(vy, vx);
+
+                msg.type = KF_MEAS_HEADING_GPS;
+                msg.a = heading;
+                xQueueSendToBack(kf_queue, &msg, 0);
+            }
         }
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(1000));

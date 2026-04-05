@@ -129,7 +129,11 @@ static void bno055_task(void *arg)
     set_opmode(OPERATION_MODE_CONFIG);
     vTaskDelay(pdMS_TO_TICKS(20));
 
-    calibrate_sensor_from_saved_profile();
+    /* -------- AXIS REMAP (MATCH YOUR MOUNTING) -------- */
+    set_axis_remap(REMAP_CONFIG_P4);
+    set_axis_sign(REMAP_SIGN_P4);
+
+    //calibrate_sensor_from_saved_profile();
 
     set_opmode(OPERATION_MODE_NDOF);
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -167,8 +171,8 @@ static void bno055_task(void *arg)
         if (ok_acc)
         {
             msg.type = KF_MEAS_ACCEL;
-            msg.a = acc[2];
-            msg.b = acc[0];
+            msg.a = acc[0];
+            msg.b = acc[1];
             xQueueSend(kf_queue, &msg, 0);
         }
 
@@ -176,7 +180,7 @@ static void bno055_task(void *arg)
         if (ok_gyro)
         {
             msg.type = KF_MEAS_GYRO;
-            msg.a = gyro[1] * (M_PI / 180.0f);
+            msg.a = gyro[2] * (M_PI / 180.0f);
             xQueueSend(kf_queue, &msg, 0);
         }
 
@@ -196,7 +200,7 @@ static void bno055_task(void *arg)
             if (theta_kf > M_PI)  theta_kf -= 2*M_PI;
             if (theta_kf < -M_PI) theta_kf += 2*M_PI;
 
-            float gyro_z = gyro[1] * (M_PI / 180.0f);
+            float gyro_z = gyro[2] * (M_PI / 180.0f);
 
             /* -------- BUFFER -------- */
             heading_buffer[heading_idx++] = heading;
@@ -237,7 +241,7 @@ static void bno055_task(void *arg)
                 kf.X[4] = theta_kf;
                 kf_heading_initialized = true;
 
-                //ESP_LOGI("KF", "Heading initialized: %f rad", heading);
+                ESP_LOGI("KF", "Heading initialized: %f rad", heading);
             }
 
             /* -------- KF UPDATE -------- */
