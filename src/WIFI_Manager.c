@@ -258,15 +258,6 @@ void  post_data(void *pvParameter)
 
 
 
-
-
-
-
-
-
-
-
-
 static esp_err_t http_event_handler_collect(esp_http_client_event_t *evt)
 {
     http_resp_buf_t *resp = (http_resp_buf_t *)evt->user_data;

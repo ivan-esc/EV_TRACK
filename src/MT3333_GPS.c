@@ -36,6 +36,7 @@ void GPS_Init(int uart_num){
     set_GPS_Update_Rate(GPS_UPDATE_1HZ);
     // Start with default frequency values
     // set_Output_Frequency(NMEA_SEN_NONE, OUTPUT_DISABLED);
+    set_Output_Frequency(NMEA_SEN_RMC, OUTPUT_ONE_FIX_CYCLE);
     set_Output_Frequency(NMEA_SEN_GGA, OUTPUT_ONE_FIX_CYCLE);
     // Set baud rate (test)
     set_GPS_Baud_Rate(GPS_BAUD_RATE_9600);

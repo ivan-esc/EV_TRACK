@@ -124,6 +124,22 @@ extern SemaphoreHandle_t i2c_mutex;
 #define CUSTOM_CHUNK_SIZE 6
 #define CUSTOM_MAX_FRAMES ((CUSTOM_MSG_MAX_LEN + CUSTOM_CHUNK_SIZE - 1) / CUSTOM_CHUNK_SIZE)
 
+typedef enum{
+    CLEAR_DAY,
+    CLEAR_NIGHT,
+    PARTLY_CLOUDY_DAY,
+    PARTLY_CLOUDY_NIGHT,
+    FOG_HAZE_DAY,
+    FOG_HAZE_NIGHT,
+    OVERCAST,
+    DRIZZLE,
+    RAIN_SHOWER_DAY,
+    RAIN_SHOWER_NIGHT,
+    RAIN,
+    SNOW,
+    THUNDERSTORM,
+}WeatherType;
+
 typedef struct {
     uint8_t brightness;
     uint8_t att_flag;
@@ -146,6 +162,7 @@ extern SemaphoreHandle_t display_mutex;
 #define CURRENT_VALID_THRESHOLD   1.0f   // A
 #define RPM_ZERO_THRESHOLD       5       // rpm (deadband)
 #define HEADING_WINDOW 20
+
 
 
 #endif /* GLOBALS_H */

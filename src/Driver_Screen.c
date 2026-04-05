@@ -16,7 +16,7 @@ void can_queue_start_att(uint32_t id){
     frame.identifier = id;
     frame.dlc = 4;
 
-    frame.data[0] = display_data.lap_count;
+    frame.data[0] = (uint8_t)(1);
     
     xQueueSend(can_tx_queue, &frame, 0);
 }
