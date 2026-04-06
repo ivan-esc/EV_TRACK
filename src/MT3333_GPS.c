@@ -31,27 +31,66 @@ NMEA_config_struct NMEA_cfg = {
  * @return None 
  * 
  */
+// void GPS_Init(int uart_num){
+//     set_UART_Instance(uart_num);
+//     // Set the GPS update rate 
+//     set_GPS_Update_Rate(GPS_UPDATE_5HZ);
+//     // Start with default frequency values
+//     // set_Output_Frequency(NMEA_SEN_NONE, OUTPUT_DISABLED);
+//     set_Output_Frequency(NMEA_SEN_RMC, OUTPUT_ONE_FIX_CYCLE);
+//     set_Output_Frequency(NMEA_SEN_GGA, OUTPUT_ONE_FIX_CYCLE);
+//     // Set baud rate (test)
+//     set_GPS_Baud_Rate(GPS_BAUD_RATE_9600);
+// }
+void send_GPS_Command(void){
+    uart_write_bytes(UART_instance_GPS, (const char*)PMTK_command_buff, strlen(PMTK_command_buff));
+}
+
+
+int set_GPS_initial_position(double lat, double lon)
+{
+    /* Format: PMTK740,<lat>,<lon> */
+    snprintf(PMTK_command_buff, sizeof(PMTK_command_buff),
+             "PMTK740,%.6f,%.6f", lat, lon);
+
+    generate_nmea_sentence(PMTK_command_buff, aux_buff, sizeof(aux_buff));
+    strcpy(PMTK_command_buff, aux_buff);
+
+    send_GPS_Command();
+    return COMMAND_OK;
+}
+
+
 void GPS_Init(int uart_num){
     set_UART_Instance(uart_num);
-    // Set the GPS update rate 
-    set_GPS_Update_Rate(GPS_UPDATE_1HZ);
-    // Start with default frequency values
-    // set_Output_Frequency(NMEA_SEN_NONE, OUTPUT_DISABLED);
+
+    vTaskDelay(pdMS_TO_TICKS(200)); // let UART stabilize
+
+    /* ---------- ENABLE ALL CONSTELLATIONS ---------- */
+    set_Satellite_System(0b11111);   // GPS + GLONASS + Galileo + BeiDou
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    /* ---------- UPDATE RATE ---------- */
+    set_GPS_Update_Rate(GPS_UPDATE_5HZ);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    /* ---------- NMEA OUTPUT ---------- */
     set_Output_Frequency(NMEA_SEN_RMC, OUTPUT_ONE_FIX_CYCLE);
     set_Output_Frequency(NMEA_SEN_GGA, OUTPUT_ONE_FIX_CYCLE);
-    // Set baud rate (test)
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    /* ---------- BAUD ---------- */
     set_GPS_Baud_Rate(GPS_BAUD_RATE_9600);
+
+    /* ---------- INITIAL POSITION (ASSIST) ---------- */
+    set_GPS_initial_position(ORIGIN_LATITUDE_COORD_FORT, ORIGIN_LONGITUDE_COORD_FORT);  // your track coords
+    vTaskDelay(pdMS_TO_TICKS(100));
 }
 
 
 void set_UART_Instance(int uart_num){ 
     strcpy(PMTK_command_buff, "");
     UART_instance_GPS = uart_num;
-}
-
-
-void send_GPS_Command(void){
-    uart_write_bytes(UART_instance_GPS, (const char*)PMTK_command_buff, strlen(PMTK_command_buff));
 }
 
 
@@ -645,7 +684,7 @@ void GPS_parse_task(void *arg)
             }
         }
 
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(1000));
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(200));
     }
 }
 
@@ -658,7 +697,7 @@ void GPS_uart_debug_read_and_print(void)
                     UART_instance_GPS,
                     rx_buf,
                     sizeof(rx_buf) - 1,
-                    pdMS_TO_TICKS(1000));
+                    pdMS_TO_TICKS(200));
 
     if (len > 0) {
         rx_buf[len] = '\0';   // make it a C string

@@ -103,8 +103,8 @@ typedef struct {
 #define FORTALEZA_TRACK
 
 #ifdef FORTALEZA_TRACK
-    #define ORIGIN_LONGITUDE_COORD2  -103.45651
-    #define ORIGIN_LATITUDE_COORD2    20.736650
+    #define ORIGIN_LONGITUDE_COORD_FORT  -103.45651
+    #define ORIGIN_LATITUDE_COORD_FORT    20.736650
 #endif  
 
 
@@ -162,7 +162,7 @@ extern SemaphoreHandle_t display_mutex;
 #define CURRENT_VALID_THRESHOLD   1.0f   // A
 #define RPM_ZERO_THRESHOLD       5       // rpm (deadband)
 #define HEADING_WINDOW 20
-
+#define THROTTLE_VALID_THRESHOLD  500   // tune (raw units)
 
 
 #endif /* GLOBALS_H */

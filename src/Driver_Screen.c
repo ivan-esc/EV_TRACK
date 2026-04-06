@@ -257,8 +257,8 @@ void lap_count_send_event_CAN(uint8_t new_lap){
 
 
 void watt_range_send_event_CAN(float value1, float value2){
-    display_data.base_throttle = value1;
-    display_data.max_throttle = value2;
+    display_data.base_throttle = (uint16_t)value1;
+    display_data.max_throttle = (uint16_t)value2;
     can_queue_watt_range(DISP_SET_BASE_POWER,
                         display_data.base_throttle,
                         display_data.max_throttle);
@@ -274,6 +274,17 @@ void map_aesthetic_send_event_CAN(uint8_t set_zoom,uint8_t set_perspective, uint
                             display_data.map_arrowpx);
 }
 
+void gauge_unit_send_event_CAN(uint8_t value){
+
+}
+
+void temp_unit_send_event_CAN(uint8_t value){
+    
+}
+
+void laptime_update_send_event_CAN(uint32_t laptime){
+    
+}
 
 
 void new_message_send_event_CAN(void){
@@ -291,6 +302,13 @@ void add_poi_send_event_CAN(uint8_t id, uint8_t color, double lat, double lon){
     /* TODO: implement */
 }
 
+void remove_poi_send_event_CAN(uint8_t id){
+    
+}
+
+void default_pois_send_event_CAN(void){
+    
+}
 
 
 /* ------------------------------------------ */

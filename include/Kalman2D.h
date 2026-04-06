@@ -8,8 +8,8 @@
 #define KF_STATE_DIM 6      // State vector dimension
 #define KF_MEAS_DIM  2      
 
-#define GPS_SPEED_MIN_VALID      1.5f   // m/s (~5.4 km/h)
-#define GPS_SPEED_STATIONARY     0.5f   // below this = stopped
+#define GPS_SPEED_MIN_VALID      1.0f   // m/s (~5.4 km/h)
+#define GPS_SPEED_STATIONARY     0.3f   // below this = stopped
 #define GPS_HEADING_NOISE_R      0.05f
 #define GPS_VEL_NOISE_R          0.1f
 
@@ -38,6 +38,7 @@ typedef struct
     kf_meas_type_t type;
     float a;
     float b;
+    bool c;
 } kf_msg_t;
 
 // Kalman filter handle 

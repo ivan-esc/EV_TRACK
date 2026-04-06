@@ -31,12 +31,14 @@
 #define MAP_ADD_POI_2 0x011
 #define MAP_ADD_POI_3 0x012
 #define MAP_REMOVE_POI 0x013
-#define MAP_ADD_DEF_POI 0x014
+#define MAP_ADD_DEF_POI 0x014 
 #define DISP_MSG_TEMPLATE 0x015
 #define DISP_MSG_CUSTOM 0x016
 #define DISP_SET_BASE_POWER 0x017
 #define DISP_SEND_POWER 0x018
 #define DISP_MAX_BRIGHTNESS 0x019
+#define DISP_FETCHED_TEMP_VIS 0x020
+#define DISP_FETCHED_WEATHER_02 0x021
 
 #define CAN_TEST_ID 0x100
 #define CAN_TX_QUEUE_LEN 32
@@ -53,15 +55,23 @@ void map_data_send_periodic_CAN(void *arg);
 void telemetry_send_periodic_CAN(void *arg);
 
 //Event sent tasks
-void brightness_send_event_CAN(uint8_t value);
+// Status Event Tasks
 void start_send_event_CAN();
 void reset_send_event_CAN();
 void lap_count_send_event_CAN(uint8_t new_lap);
 
+// Message terminal Event Tasks
+void gauge_unit_send_event_CAN(uint8_t value);
+void temp_unit_send_event_CAN(uint8_t value);
+void laptime_update_send_event_CAN(uint32_t laptime);
 
+void brightness_send_event_CAN(uint8_t value);
 void watt_range_send_event_CAN(float value1, float value2);
 void map_aesthetic_send_event_CAN(uint8_t set_zoom,uint8_t set_perspective, uint8_t arrow_size);
+
 void add_poi_send_event_CAN(uint8_t id, uint8_t color, double lat, double lon);
+void remove_poi_send_event_CAN(uint8_t id);
+void default_pois_send_event_CAN(void);
 
 void new_message_send_event_CAN();
 

@@ -4,16 +4,17 @@
 //Initialize display struct at set values
 SemaphoreHandle_t display_mutex = NULL;
 DisplayData display_data = {
-    0, //brightness
-    0, // att_flag
-    0, // lap_count
-    1, // gauge_unit
-    175, // map_zoom
-    45, // map_persp
-    30, // map_arrowpx
-    470.0f, // base_throttle
-    2900.0f, // max_throttle
-    {0}   // msg[101]
+    40,     // brightness
+    0,      // att_flag
+    0,      // lap_count
+    1,      // gauge_unit
+    175,    // map_zoom
+    45,     // map_persp
+    30,     // map_arrowpx
+    470,    // base_throttle
+    2900,   // max_throttle
+    210000, // laptime
+    {0}     // msg[101]
 };
 
 void FloatToBytes(float v, uint8_t *b){
@@ -191,6 +192,28 @@ static bool parse_u8_arg(const char *str, uint8_t *out_value)
     return true;
 }
 
+static bool parse_u32_arg(const char *str, uint32_t *out_value)
+{
+    if (str == NULL || out_value == NULL) {
+        return false;
+    }
+
+    char *endptr = NULL;
+    long value = strtol(str, &endptr, 10);
+
+    if (*str == '\0' || *endptr != '\0') {
+        return false;
+    }
+
+    if (value < 0 || value > 2100000) {
+        return false;
+    }
+
+    *out_value = (uint32_t)value;
+    return true;
+
+}
+
 static bool parse_float_arg(const char *str, float *out_value)
 {
     if (str == NULL || out_value == NULL) {
@@ -232,7 +255,7 @@ static bool parse_double_arg(const char *str, double *out_value)
 typedef enum {
     CMD_NONE = 0,
     CMD_WATT_RANGE,
-    CMD_GAUGE_UNI,
+    CMD_GAUGE_UNIT,
     CMD_ZOOM,
     CMD_PERSPECTIVE,
     CMD_ARROW,
@@ -241,6 +264,8 @@ typedef enum {
     CMD_REMOVE_POI,
     CMD_LAPTIME,
     CMD_BRIGHTNESS,
+    CMD_RECALIBRATE,
+    CMD_TEMP_UNIT
 } CommandId;
 
 /* =========================================================
@@ -284,7 +309,7 @@ static CommandId identify_command(const char *cmd)
         return CMD_WATT_RANGE;
     }
     if (strcasecmp(cmd, "/gauge_unit") == 0) {
-        return CMD_GAUGE_UNI;
+        return CMD_GAUGE_UNIT;
     }
     if (strcasecmp(cmd, "/zoom") == 0) {
         return CMD_ZOOM;
@@ -309,6 +334,12 @@ static CommandId identify_command(const char *cmd)
     }
     if (strcasecmp(cmd, "/brightness") == 0) {
         return CMD_BRIGHTNESS;
+    }
+    if (strcasecmp(cmd, "/recalibrate") == 0) {
+        return CMD_RECALIBRATE;
+    }
+    if (strcasecmp(cmd, "/temp") == 0) {
+        return CMD_TEMP_UNIT;
     }
     return CMD_NONE;
 }
@@ -345,6 +376,112 @@ bool execute_command_from_message(const char *message)
                 return true;
             }
             brightness_send_event_CAN(value);
+            return true;
+        }
+
+        case CMD_GAUGE_UNIT:{
+            if (argc != 2){
+                return true;
+            }
+            uint8_t value = 0;
+            if (!parse_u8_arg(argv[1], &value)) {
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                return true;
+            }
+            gauge_unit_send_event_CAN(value);
+            return true;
+        } 
+
+        case CMD_ZOOM:{
+            if (argc != 2){
+                return true;
+            }
+            uint8_t zoom_val = 0;
+            uint8_t persp_val = display_data.map_persp;
+            uint8_t arrow_px_val = display_data.map_arrowpx;
+            if (!parse_u8_arg(argv[1], &zoom_val)) {
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                return true;
+            }
+            map_aesthetic_send_event_CAN(zoom_val,persp_val,arrow_px_val);
+            return true;
+        }
+
+        case CMD_PERSPECTIVE:{
+            if (argc != 2){
+                return true;
+            }
+            uint8_t zoom_val = display_data.map_zoom;
+            uint8_t persp_val = 0;
+            uint8_t arrow_px_val = display_data.map_arrowpx;
+            if (!parse_u8_arg(argv[1], &persp_val)) {
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                return true;
+            }
+            map_aesthetic_send_event_CAN(zoom_val,persp_val,arrow_px_val);
+            return true;
+        }
+
+        case CMD_ARROW:{
+            if (argc != 2){
+                return true;
+            }
+            uint8_t zoom_val = display_data.map_zoom;
+            uint8_t persp_val = display_data.map_persp;
+            uint8_t arrow_px_val = 0;
+            if (!parse_u8_arg(argv[1], &persp_val)) {
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                return true;
+            }
+            map_aesthetic_send_event_CAN(zoom_val,persp_val,arrow_px_val);
+            return true;
+        }
+
+        case CMD_DEFAULT_POIS:{
+            if (argc != 2){
+                return true;
+            }
+            return true;
+        }
+
+        case CMD_REMOVE_POI:{
+            if (argc != 2){
+                return true;
+            }
+            return true;
+        }
+
+        case CMD_LAPTIME:{
+            if (argc != 2){
+                return true;
+            }
+            uint32_t laptime = 0;
+            if (!parse_u32_arg(argv[1], &laptime)) {
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                return true;
+            }
+            display_data.lap_set_time = laptime;
+            temp_unit_send_event_CAN(laptime);
+            return true;
+        }
+
+        case CMD_RECALIBRATE:{
+            if (argc != 2){
+                return true;
+            }
+            return true;
+        }
+
+        case CMD_TEMP_UNIT:{
+            if (argc != 2){
+                return true;
+            }
+            uint8_t value = 0;
+            if (!parse_u8_arg(argv[1], &value)) {
+                //ESP_LOGW("CMD", "Unrecognized command: %s", message);
+                return true;
+            }
+            temp_unit_send_event_CAN(value);
             return true;
         }
 

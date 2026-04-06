@@ -229,14 +229,12 @@ static void bno055_task(void *arg)
                 float variance = 1.0f - sqrtf(mean_sin * mean_sin + mean_cos * mean_cos);
 
                 reliable = (variance < 0.05f) &&
-                           (fabs(gyro_z) < 0.5f) &&
-                           (fabs(current) < CURRENT_VALID_THRESHOLD);
-
-               //ESP_LOGI("HEADING", "var=%f rel=%d", variance, reliable);
+                        (fabs(current) < CURRENT_VALID_THRESHOLD);
+            //    ESP_LOGI("HEADING", "var=%f rel=%d", variance, reliable);
             }
 
             /* -------- KF INIT -------- */
-            if (!kf_heading_initialized && reliable)
+            if (!kf_heading_initialized /*&& reliable*/)
             {
                 kf.X[4] = theta_kf;
                 kf_heading_initialized = true;
@@ -245,12 +243,18 @@ static void bno055_task(void *arg)
             }
 
             /* -------- KF UPDATE -------- */
-            if (reliable)
-            {
-                msg.type = KF_MEAS_HEADING;
-                msg.a = theta_kf;
-                xQueueSend(kf_queue, &msg, 0);
-            }
+            // if (reliable)
+            // {
+            //     msg.type = KF_MEAS_HEADING;
+            //     msg.a = theta_kf;
+            //     msg.b = current;  // pass current
+            //     xQueueSend(kf_queue, &msg, 0);
+            // }
+            msg.type = KF_MEAS_HEADING;
+            msg.a = theta_kf;
+            msg.b = current;
+            msg.c = reliable;
+            xQueueSend(kf_queue, &msg, 0);
 
             /* -------- TELEMETRY -------- */
             xSemaphoreTake(telemetry_mutex, portMAX_DELAY);

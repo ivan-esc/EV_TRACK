@@ -356,45 +356,43 @@ void foc_uart_test_task(void *arg)
 
             /* ---------- KALMAN VELOCITY UPDATE ---------- */
 
+            /* ---------- KALMAN VELOCITY UPDATE ---------- */
+
             kf_msg_t msg;
 
-            /* ===== CASE 1: VEHICLE STOP ===== */
-            if (abs(rpm) < RPM_ZERO_THRESHOLD)
+            bool throttle_active = (fast.throttle_raw > THROTTLE_VALID_THRESHOLD);
+            bool current_active  = (fabs(current_A) > CURRENT_VALID_THRESHOLD);
+
+            bool motor_driving = throttle_active && current_active;
+
+            /* ===== CASE 1: MOTOR DRIVING → TRUST RPM ===== */
+            if (motor_driving)
             {
-                kf.X[2] = 0.0f;
-                kf.X[3] = 0.0f;
+                float omega = (rpm * TWO_PI) / 60.0f;
+                float v = omega * WHEEL_RADIUS_M;
 
-                kf.P[2][2] = 0.001f;
-                kf.P[3][3] = 0.001f;
+                float heading = kf.X[4];
 
-                
+                float vx = v * cosf(heading);
+                float vy = v * sinf(heading);
+
                 msg.type = KF_MEAS_VEL;
-                msg.a = 0.0f;
-                msg.b = 0.0f;
+                msg.a = vx;
+                msg.b = vy;
+
                 xQueueSend(kf_queue, &msg, 0);
+
+                // ESP_LOGI("RPM_TRUST", "ON | thr=%d cur=%.2f rpm=%ld v=%.2f",
+                //     fast.throttle_raw, current_A, rpm, v);
             }
+
+            /* ===== CASE 2: MOTOR NOT DRIVING → IGNORE RPM ===== */
             else
             {
-                /* ===== CASE 2: VALID CURRENT ===== */
-                if (fabs(current_A) > CURRENT_VALID_THRESHOLD)
-                {
-                    float omega = (rpm * TWO_PI) / 60.0f;
-                    float v = omega * WHEEL_RADIUS_M;
+                // DO NOTHING → let IMU + GPS handle velocity
 
-                    float heading;
-
-                    /* ---------- THREAD SAFE READ ---------- */
-                    heading = kf.X[4];
-
-                    float vx = v * cosf(heading);
-                    float vy = v * sinf(heading);
-
-                    msg.type = KF_MEAS_VEL;
-                    msg.a = vx;
-                    msg.b = vy;
-
-                    xQueueSend(kf_queue, &msg, 0);
-                }
+                ESP_LOGI("RPM_TRUST", "OFF | thr=%d cur=%.2f rpm=%ld",
+                    fast.throttle_raw, current_A, rpm);
             }
         }
 

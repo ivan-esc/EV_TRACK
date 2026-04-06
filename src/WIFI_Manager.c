@@ -240,15 +240,31 @@ void  post_data(void *pvParameter)
             esp_err_t err = esp_http_client_perform(client);
             //ESP_LOGI("HTTP", "Status = %d", esp_http_client_get_status_code(client));
 
-            if (err == ESP_OK) {
-                //ESP_LOGI("HTTP", "Telemetry sent");
-            } else {
-                //ESP_LOGE("HTTP", "POST failed: %s", esp_err_to_name(err));
+            // if (err == ESP_OK) {
+            //     //ESP_LOGI("HTTP", "Telemetry sent");
+            // } else {
+            //     //ESP_LOGE("HTTP", "POST failed: %s", esp_err_to_name(err));
+            // }
+            if (err != ESP_OK) {
+                //ESP_LOGW("HTTP", "POST failed, resetting client");
+
+                if (client != NULL) {
+                    esp_http_client_cleanup(client);
+                    client = NULL;
+                }
+
+                esp_http_client_config_t config = {
+                    .url = "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/lectures",
+                    .crt_bundle_attach = esp_crt_bundle_attach,
+                    .keep_alive_enable = true,
+                };
+
+                client = esp_http_client_init(&config);
             }
 
         }
         last_wifi = wifi_connected_flag;
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(600));
     }
 
     esp_http_client_cleanup(client);
@@ -302,7 +318,7 @@ static void http_client_init_ctx(http_client_ctx_t *ctx, const char *url)
     esp_http_client_config_t config = {
         .url = url,
         .crt_bundle_attach = esp_crt_bundle_attach,
-        .timeout_ms = 3000,
+        .timeout_ms = 2000,
         .event_handler = http_event_handler_collect,
         .user_data = &ctx->resp,
         .keep_alive_enable = true,  
@@ -320,6 +336,21 @@ static esp_err_t http_client_perform_ctx(http_client_ctx_t *ctx, int *http_statu
     esp_http_client_set_method(ctx->client, HTTP_METHOD_GET);
 
     esp_err_t err = esp_http_client_perform(ctx->client);
+
+    if (err != ESP_OK) {
+
+        ESP_LOGW("HTTP", "GET failed, resetting client");
+
+        if (ctx->client != NULL) {
+            esp_http_client_cleanup(ctx->client);
+            ctx->client = NULL;
+        }
+
+        // Recreate client
+        http_client_init_ctx(ctx, STATUS_URL);  // or MESSAGE_URL depending caller
+
+        return err;
+    }
 
     int status_code = esp_http_client_get_status_code(ctx->client);
 
@@ -379,7 +410,7 @@ void poll_status_task(void *pvParameter)
         }
 
         last_wifi = wifi_connected_flag;
-        vTaskDelay(pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
 
