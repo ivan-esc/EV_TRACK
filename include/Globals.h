@@ -151,6 +151,12 @@ typedef struct {
     uint16_t base_throttle;
     uint16_t max_throttle;
     uint32_t lap_set_time;
+    float ambient_temp;
+    int32_t visibility;
+    uint8_t precipitation;
+    uint8_t humidity;
+    uint8_t hour;
+    WeatherType curr_weather;
     char custom_msg[CHAR_LEN];
 } DisplayData;
 extern DisplayData display_data;

@@ -97,7 +97,7 @@ esp_err_t ms4525do_read_raw(ms4525do_t *dev,
                         pdMS_TO_TICKS(50));
 
     if (ret != ESP_OK) {
-        ESP_LOGE("PITOT", "I2C read failed");
+        // ESP_LOGE("PITOT", "I2C read failed");
         return ret;
     }
 
@@ -106,10 +106,10 @@ esp_err_t ms4525do_read_raw(ms4525do_t *dev,
     uint16_t rp = ((uint16_t)(buf[0] & 0x3F) << 8) | buf[1];
     uint16_t rt = ((uint16_t)buf[2] << 3) | (buf[3] >> 5);
 
-    ESP_LOGI("PITOT_RAW", "status=%d raw_p=%u raw_t=%u", status, rp, rt);
+    // ESP_LOGI("PITOT_RAW", "status=%d raw_p=%u raw_t=%u", status, rp, rt);
 
     if (status == 3) {
-        ESP_LOGE("PITOT_RAW", "Sensor fault!");
+        // ESP_LOGE("PITOT_RAW", "Sensor fault!");
         return ESP_FAIL;
     }
 
@@ -150,14 +150,14 @@ esp_err_t ms4525do_read(ms4525do_t *dev,
 
     esp_err_t ret = ms4525do_read_raw(dev, &raw_p, &raw_t);
     if (ret != ESP_OK) {
-        ESP_LOGW("PITOT", "Read failed");
+        // ESP_LOGW("PITOT", "Read failed");
         return ret;
     }
 
     float pa = ms4525do_raw_to_pa(raw_p) - dev->zero_offset_pa;
     float airspeed = ms4525do_pa_to_airspeed(pa);
 
-    ESP_LOGI("PITOT_PROC", "raw=%u dp=%f air=%f", raw_p, pa, airspeed);
+    // ESP_LOGI("PITOT_PROC", "raw=%u dp=%f air=%f", raw_p, pa, airspeed);
 
     if (diff_pa)
         *diff_pa = pa;
@@ -285,9 +285,9 @@ void pitot_task(void *arg)
             telem->air_speed = airspeed;
             xSemaphoreGive(telemetry_mutex);
 
-            ESP_LOGI("PITOT_FILTER",
-                     "dp_raw=%f dp_avg=%f air=%f",
-                     dp_pa, dp_avg, airspeed);
+            // ESP_LOGI("PITOT_FILTER",
+            //          "dp_raw=%f dp_avg=%f air=%f",
+            //          dp_pa, dp_avg, airspeed);
         }
 
         /* Sampling rate */

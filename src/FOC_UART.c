@@ -103,11 +103,11 @@ bool foc_uart_receive_reply(foc_uart_cmd_t expected_cmd,
         int r = uart_read_bytes(FOC_DRIVER_UART_CHANNEL, &b, 1, pdMS_TO_TICKS(10));
 
         if (r == 1){
-            ESP_LOGI("FOC", "RX byte = 0x%02X", b);
+            // ESP_LOGI("FOC", "RX byte = 0x%02X", b);
 
             if (b == FOC_UART_SOF)
             {
-                ESP_LOGI("FOC", "REAL SOF detected");
+                // ESP_LOGI("FOC", "REAL SOF detected");
                 break;
             }
         }
@@ -130,9 +130,9 @@ bool foc_uart_receive_reply(foc_uart_cmd_t expected_cmd,
                         pdMS_TO_TICKS(timeout_ms)) != len)
         return false;
 
-    ESP_LOGI("FOC", "LEN=%u CMD=%u", len, buf[0]);
-    for (int i = 0; i < len; i++)
-        ESP_LOGI("FOC", "buf[%d]=0x%02X", i, buf[i]);
+    // ESP_LOGI("FOC", "LEN=%u CMD=%u", len, buf[0]);
+    // for (int i = 0; i < len; i++)
+    //     ESP_LOGI("FOC", "buf[%d]=0x%02X", i, buf[i]);
 
     uint8_t crc_rx;
     if (uart_read_bytes(FOC_DRIVER_UART_CHANNEL, &crc_rx, 1,
@@ -188,7 +188,7 @@ bool foc_uart_get_all_fast(foc_all_fast_t *out)
         return false;
 
     memcpy(out, pl, 14);
-    ESP_LOGI("FOC", "FAST struct size = %d", sizeof(foc_all_fast_t));
+    // ESP_LOGI("FOC", "FAST struct size = %d", sizeof(foc_all_fast_t));
     return true;
 }
 
@@ -391,8 +391,8 @@ void foc_uart_test_task(void *arg)
             {
                 // DO NOTHING → let IMU + GPS handle velocity
 
-                ESP_LOGI("RPM_TRUST", "OFF | thr=%d cur=%.2f rpm=%ld",
-                    fast.throttle_raw, current_A, rpm);
+                // ESP_LOGI("RPM_TRUST", "OFF | thr=%d cur=%.2f rpm=%ld",
+                //     fast.throttle_raw, current_A, rpm);
             }
         }
 

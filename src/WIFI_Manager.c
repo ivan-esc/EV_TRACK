@@ -1,5 +1,6 @@
 #include "WIFI_Manager.h"
 #include "Generic.h"
+#include "Driver_Screen.h"
 #include <stdlib.h>
 
 //////// WIFI Settings //////// 
@@ -85,6 +86,7 @@ void WIFI_Event_Handler(void *event_handler_arg, esp_event_base_t event_base, in
             //ESP_LOGI("WIFI", "WIFI got IP address");
             current_status_code = STATUS_ONLINE;
             wifi_connected_flag = true; 
+            fetch_weather_once();
             break;
 
         default:
@@ -176,17 +178,10 @@ void  post_data(void *pvParameter)
             data->timestamp = telemetry_timestamp_ms();
 
             // throttle
-            float throttle = (float)data->throttle_raw / 4095.0f; 
-            // float p_bott    = 470.0f;
-            // float p_top     = 2900.0f;
-
-            // float range = p_top - p_bott;
-            // if (range <= 0.0f) range = 1.0f;
-            // float norm = (throttle - p_bott) / range;
-            // if (norm < 0.0f) norm = 0.0f;
-            // if (norm > 1.0f) norm = 1.0f;
-            // float p = norm * 100.0f;
-
+            float throt = (float)data->throttle_raw / 4095.0f; 
+            float throttle = throt*100.0f;
+            float x_kmh = (data->velocity_x)*3.6f; // convert m/s to km/h
+            float y_kmh = (data->velocity_y)*3.6f; // convert m/s to km/h
 
             snprintf(post_data, sizeof(post_data),
                 "{"
@@ -222,8 +217,8 @@ void  post_data(void *pvParameter)
                 data->orient_y,
                 data->orient_z,
                 data->rpms,
-                data->velocity_x,
-                data->velocity_y,
+                x_kmh,
+                y_kmh,
                 data->ambient_temp,
                 data->altitude_m,
                 data->num_sats,
@@ -339,7 +334,7 @@ static esp_err_t http_client_perform_ctx(http_client_ctx_t *ctx, int *http_statu
 
     if (err != ESP_OK) {
 
-        ESP_LOGW("HTTP", "GET failed, resetting client");
+        // ESP_LOGW("HTTP", "GET failed, resetting client");
 
         if (ctx->client != NULL) {
             esp_http_client_cleanup(ctx->client);
@@ -455,4 +450,85 @@ void poll_message_task(void *pvParameter)
         last_wifi = wifi_connected_flag;
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
+}
+
+void fetch_weather_once(void)
+{
+    if (!wifi_connected_flag) return;
+
+    http_client_ctx_t ctx;
+    http_client_init_ctx(&ctx, WEATHER_URL);
+
+    int http_status = 0;
+
+    esp_err_t err = http_client_perform_ctx(&ctx, &http_status);
+
+    if (err != ESP_OK || http_status != 200) {
+        return;
+    }
+
+    float temp = 0.0f;
+    int visibility = 0;
+    int humidity = 0;
+    int precipitation = 0;
+    int weather_code = 0;
+    char time_str[40] = {0};
+
+    bool ok = true;
+
+    ok &= json_extract_float(ctx.buffer, "\"temperature_2m\":", &temp);
+    ok &= json_extract_int(ctx.buffer, "\"visibility\":", &visibility);
+    ok &= json_extract_int(ctx.buffer, "\"relative_humidity_2m\":", &humidity);
+    ok &= json_extract_int(ctx.buffer, "\"precipitation_probability\":", &precipitation);
+    ok &= json_extract_int(ctx.buffer, "\"weather_code\":", &weather_code);
+    ok &= json_extract_string(ctx.buffer, "\"time\":\"", time_str, sizeof(time_str));
+
+    if (!ok) return;
+
+    /* ---- Extract hour ---- */
+    int hour = 0;
+    if (strlen(time_str) >= 13) {
+        hour = (time_str[11] - '0') * 10 + (time_str[12] - '0');
+    }
+
+    /* ---- Extract timezone offset ---- */
+    int tz_offset = 0;
+    const char *tz_ptr = strstr(ctx.buffer, "\"timezoneAbbreviation\":\"GMT");
+    if (tz_ptr) {
+        tz_ptr += strlen("\"timezoneAbbreviation\":\"GMT");
+        tz_offset = atoi(tz_ptr);
+    }
+
+    int local_hour = hour + tz_offset;
+
+    if (local_hour < 0) local_hour += 24;
+    if (local_hour >= 24) local_hour -= 24;
+
+    bool is_day = (local_hour >= 7 && local_hour <= 19);
+
+    WeatherType weather = map_weather_code(weather_code, is_day);
+
+    /* ---- Store safely ---- */
+    xSemaphoreTake(display_mutex, portMAX_DELAY);
+
+    display_data.ambient_temp = temp;
+    display_data.visibility = visibility;
+    display_data.humidity = (uint8_t)humidity;
+    display_data.precipitation = (uint8_t)precipitation;
+    display_data.hour = (uint8_t)local_hour;
+    display_data.curr_weather = weather;
+
+    xSemaphoreGive(display_mutex);
+
+    /* Optional: trigger CAN update */
+    // send_weather_event_CAN();  <-- if you implement later
+    can_queue_weather_temp_vis(DISP_FETCHED_TEMP_VIS,
+                           temp,
+                           visibility);
+
+    can_queue_weather_extra(DISP_FETCHED_WEATHER_02,
+                            (uint8_t)precipitation,
+                            (uint8_t)humidity,
+                            (uint8_t)weather,
+                            (uint8_t)local_hour);
 }

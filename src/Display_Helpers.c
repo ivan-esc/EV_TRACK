@@ -13,9 +13,24 @@ DisplayData display_data = {
     30,     // map_arrowpx
     470,    // base_throttle
     2900,   // max_throttle
-    210000, // laptime
+    198000, // laptime
+    0.0f,   // ambient temp
+    0,      //visibility
+    0,      //precipitation
+    0,      //humidity
+    0,      //hour
+    OVERCAST,//curr weather
     {0}     // msg[101]
 };
+
+uint32_t lap_set_time;
+    float ambient_temp;
+    int32_t visibility;
+    uint8_t precipitation;
+    uint8_t humidity;
+    uint8_t hour;
+    WeatherType curr_weather;
+    char custom_msg[CHAR_LEN];
 
 void FloatToBytes(float v, uint8_t *b){
     memcpy(b, &v, sizeof(float));
@@ -137,6 +152,109 @@ bool json_extract_current_lap(const char *json, uint8_t *lap)
 
     *lap = (uint8_t)value;
     return true;
+}
+
+/* =========================================================
+   Weather JSON extractors
+   ========================================================= */
+
+bool json_extract_float(const char *json, const char *key, float *out)
+{
+    if (!json || !key || !out) return false;
+
+    const char *start = strstr(json, key);
+    if (!start) return false;
+
+    start += strlen(key);
+
+    while (*start == ' ' || *start == '\t' || *start == ':') start++;
+
+    char *endptr;
+    float val = strtof(start, &endptr);
+
+    if (start == endptr) return false;
+
+    *out = val;
+    return true;
+}
+
+bool json_extract_int(const char *json, const char *key, int *out)
+{
+    if (!json || !key || !out) return false;
+
+    const char *start = strstr(json, key);
+    if (!start) return false;
+
+    start += strlen(key);
+
+    while (*start == ' ' || *start == '\t' || *start == ':') start++;
+
+    char *endptr;
+    long val = strtol(start, &endptr, 10);
+
+    if (start == endptr) return false;
+
+    *out = (int)val;
+    return true;
+}
+
+bool json_extract_string(const char *json, const char *key, char *out, size_t max_len)
+{
+    if (!json || !key || !out) return false;
+
+    const char *start = strstr(json, key);
+    if (!start) return false;
+
+    start += strlen(key);
+
+    const char *end = strchr(start, '"');
+    if (!end) return false;
+
+    size_t len = end - start;
+    if (len >= max_len) return false;
+
+    memcpy(out, start, len);
+    out[len] = '\0';
+
+    return true;
+}
+
+WeatherType map_weather_code(int code, bool is_day)
+{
+    if (code == 0) return is_day ? CLEAR_DAY : CLEAR_NIGHT;
+
+    if (code >= 1 && code <= 2)
+        return is_day ? PARTLY_CLOUDY_DAY : PARTLY_CLOUDY_NIGHT;
+
+    if (code == 3) return OVERCAST;
+
+    if ((code >= 4 && code <= 12) || (code >= 30 && code <= 49))
+        return is_day ? FOG_HAZE_DAY : FOG_HAZE_NIGHT;
+
+    if (code >= 13 && code <= 16) return OVERCAST;
+
+    if (code >= 17 && code <= 19) return THUNDERSTORM;
+
+    if (code >= 20 && code <= 29) return OVERCAST;
+
+    if (code >= 50 && code <= 59) return DRIZZLE;
+
+    if (code >= 60 && code <= 69) return RAIN;
+
+    if (code >= 70 && code <= 79) return SNOW;
+
+    if (code >= 80 && code <= 84)
+        return is_day ? RAIN_SHOWER_DAY : RAIN_SHOWER_NIGHT;
+
+    if (code >= 85 && code <= 90) return SNOW;
+
+    if (code >= 91 && code <= 92) return RAIN;
+
+    if (code >= 93 && code <= 94) return SNOW;
+
+    if (code >= 95 && code <= 99) return THUNDERSTORM;
+
+    return OVERCAST;
 }
 
 /* =========================================================

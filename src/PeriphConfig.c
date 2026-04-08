@@ -239,7 +239,7 @@ static void bno055_task(void *arg)
                 kf.X[4] = theta_kf;
                 kf_heading_initialized = true;
 
-                ESP_LOGI("KF", "Heading initialized: %f rad", heading);
+                // ESP_LOGI("KF", "Heading initialized: %f rad", heading);
             }
 
             /* -------- KF UPDATE -------- */

@@ -701,7 +701,7 @@ void GPS_uart_debug_read_and_print(void)
 
     if (len > 0) {
         rx_buf[len] = '\0';   // make it a C string
-        ESP_LOGI("GPS_UART", "%s", (char *)rx_buf);
+        // ESP_LOGI("GPS_UART", "%s", (char *)rx_buf);
     }
 }
 

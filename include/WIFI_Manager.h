@@ -12,6 +12,7 @@
 
 #define STATUS_URL  "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/record/status"
 #define MESSAGE_URL "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/record/message"
+#define WEATHER_URL "https://elyos-telemetry-exylp.ondigitalocean.app/elyos-telemetry-backend/api/record/weather"
 
 ///////// WIFI SETTINGS /////////
 extern const char *ssid;
@@ -56,6 +57,7 @@ void WIFI_Connect(void);
 
 void poll_status_task(void *pvParameter);
 void poll_message_task(void *pvParameter);
+void fetch_weather_once(void);
 
 typedef struct {
     char *buffer;

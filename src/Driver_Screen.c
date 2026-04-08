@@ -155,6 +155,40 @@ void can_queue_map_aesthetic(uint32_t id, uint8_t map_zoom, uint8_t map_persp, u
     xQueueSend(can_tx_queue, &frame, 0);
 }
 
+void can_queue_weather_temp_vis(uint32_t id, float temp, int32_t visibility)
+{
+    if (can_tx_queue == NULL) return;
+
+    can_frame_t frame;
+    frame.identifier = id;
+    frame.dlc = 8;
+
+    FloatToBytes(temp, &frame.data[0]);     // 4 bytes
+    I32toBytes(visibility, &frame.data[4]); // 4 bytes
+
+    xQueueSend(can_tx_queue, &frame, 0);
+}
+
+void can_queue_weather_extra(uint32_t id,
+                             uint8_t precipitation,
+                             uint8_t humidity,
+                             uint8_t weather,
+                             uint8_t hour)
+{
+    if (can_tx_queue == NULL) return;
+
+    can_frame_t frame;
+    frame.identifier = id;
+    frame.dlc = 4;
+
+    frame.data[0] = precipitation;
+    frame.data[1] = humidity;
+    frame.data[2] = weather;
+    frame.data[3] = hour;
+
+    xQueueSend(can_tx_queue, &frame, 0);
+}
+
 void can_queue_custom_msg(uint32_t id, const char *msg, bool force_send)
 {
     if (can_tx_queue == NULL) return;
@@ -327,7 +361,7 @@ void can_init(void)
     ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
     ESP_ERROR_CHECK(twai_start());
 
-    ESP_LOGI(TAG_CAN, "TWAI driver started");
+    // ESP_LOGI(TAG_CAN, "TWAI driver started");
 }
 
 /* ------------------------------------------ */
@@ -352,7 +386,7 @@ void can_tx_task(void *arg)
 
             if (xQueueReceive(can_tx_queue, &frame, pdMS_TO_TICKS(10)) == pdTRUE) {
                 
-                ESP_LOGI(TAG_CAN, "Sending frame ID: 0x%X", frame.identifier);
+                // ESP_LOGI(TAG_CAN, "Sending frame ID: 0x%X", frame.identifier);
                 tx_msg.identifier = frame.identifier;
                 tx_msg.data_length_code = frame.dlc;
                 tx_msg.flags = TWAI_MSG_FLAG_NONE;
@@ -362,7 +396,7 @@ void can_tx_task(void *arg)
                 esp_err_t err = twai_transmit(&tx_msg, pdMS_TO_TICKS(50));
 
                 if (err != ESP_OK) {
-                    ESP_LOGE(TAG_CAN, "TX failed (%s)", esp_err_to_name(err));
+                    // ESP_LOGE(TAG_CAN, "TX failed (%s)", esp_err_to_name(err));
                 }
             }
         }
@@ -380,7 +414,7 @@ void can_tx_task(void *arg)
             ESP_ERROR_CHECK(twai_driver_install(&g_config, &t_config, &f_config));
             ESP_ERROR_CHECK(twai_start());
 
-            ESP_LOGI(TAG_CAN, "TWAI driver recover start");
+            // ESP_LOGI(TAG_CAN, "TWAI driver recover start");
             vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(3000));
         }
         else if (status.state == TWAI_STATE_RECOVERING) {
