@@ -9,11 +9,11 @@ DisplayData display_data = {
     0,      // lap_count
     1,      // gauge_unit
     175,    // map_zoom
-    45,     // map_persp
-    30,     // map_arrowpx
-    470,    // base_throttle
-    2900,   // max_throttle
-    198000, // laptime
+    25,     // map_persp
+    20,     // map_arrowpx
+    490,    // base_throttle
+    2750,   // max_throttle
+    495000, // laptime
     0.0f,   // ambient temp
     0,      //visibility
     0,      //precipitation
@@ -22,15 +22,6 @@ DisplayData display_data = {
     OVERCAST,//curr weather
     {0}     // msg[101]
 };
-
-uint32_t lap_set_time;
-    float ambient_temp;
-    int32_t visibility;
-    uint8_t precipitation;
-    uint8_t humidity;
-    uint8_t hour;
-    WeatherType curr_weather;
-    char custom_msg[CHAR_LEN];
 
 void FloatToBytes(float v, uint8_t *b){
     memcpy(b, &v, sizeof(float));

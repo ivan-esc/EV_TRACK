@@ -12,6 +12,7 @@ const char *pass = "qwerty0987";
 
 const bool allow_to_reconnect = true;
 bool wifi_connected_flag = false;
+volatile bool weather_fetch_request = false;
 
 char ip_address[20];
 
@@ -86,7 +87,7 @@ void WIFI_Event_Handler(void *event_handler_arg, esp_event_base_t event_base, in
             //ESP_LOGI("WIFI", "WIFI got IP address");
             current_status_code = STATUS_ONLINE;
             wifi_connected_flag = true; 
-            fetch_weather_once();
+            weather_fetch_request = true;
             break;
 
         default:
@@ -178,8 +179,13 @@ void  post_data(void *pvParameter)
             data->timestamp = telemetry_timestamp_ms();
 
             // throttle
-            float throt = (float)data->throttle_raw / 4095.0f; 
-            float throttle = throt*100.0f;
+            uint16_t raw_throt = data->throttle_raw;
+            uint16_t throt_scale = display_data.max_throttle - display_data.base_throttle;
+            uint16_t raw = data->throttle_raw;
+            uint16_t base = display_data.base_throttle;
+            uint16_t max = display_data.max_throttle;
+
+            float throttle = ((float)(raw - base) / (float)(max - base)) * 100.0f;
             float x_kmh = (data->velocity_x)*3.6f; // convert m/s to km/h
             float y_kmh = (data->velocity_y)*3.6f; // convert m/s to km/h
 
@@ -222,7 +228,7 @@ void  post_data(void *pvParameter)
                 data->ambient_temp,
                 data->altitude_m,
                 data->num_sats,
-                data->air_speed,
+                fabsf(data->air_speed),
                 throttle
             );
 
@@ -259,7 +265,7 @@ void  post_data(void *pvParameter)
 
         }
         last_wifi = wifi_connected_flag;
-        vTaskDelay(pdMS_TO_TICKS(600));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
     esp_http_client_cleanup(client);
@@ -522,13 +528,17 @@ void fetch_weather_once(void)
 
     /* Optional: trigger CAN update */
     // send_weather_event_CAN();  <-- if you implement later
-    can_queue_weather_temp_vis(DISP_FETCHED_TEMP_VIS,
-                           temp,
-                           visibility);
+    weather_send_event_CAN((uint8_t)precipitation,(uint8_t)humidity, (uint8_t)weather, (uint8_t)local_hour, (float)temp, (int32_t)visibility);
+}
 
-    can_queue_weather_extra(DISP_FETCHED_WEATHER_02,
-                            (uint8_t)precipitation,
-                            (uint8_t)humidity,
-                            (uint8_t)weather,
-                            (uint8_t)local_hour);
+void weather_task(void *arg)
+{
+    while (1) {
+        if (weather_fetch_request) {
+            weather_fetch_request = false;
+            fetch_weather_once();   // ✅ safe here
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
 }

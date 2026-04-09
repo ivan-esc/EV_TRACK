@@ -168,7 +168,7 @@ extern SemaphoreHandle_t display_mutex;
 #define CURRENT_VALID_THRESHOLD   1.0f   // A
 #define RPM_ZERO_THRESHOLD       5       // rpm (deadband)
 #define HEADING_WINDOW 20
-#define THROTTLE_VALID_THRESHOLD  500   // tune (raw units)
+#define THROTTLE_VALID_THRESHOLD  650   // tune (raw units)
 
 
 #endif /* GLOBALS_H */

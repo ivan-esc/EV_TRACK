@@ -260,12 +260,15 @@ void map_data_send_periodic_CAN(void *arg){
 void telemetry_send_periodic_CAN(void *arg){
     TickType_t last = xTaskGetTickCount();
     while(1){
-        float vel_mag = fabsf(telemetry_data.velocity_x*telemetry_data.velocity_x + telemetry_data.velocity_y*telemetry_data.velocity_y);
+        float vel_mag = sqrtf(
+            telemetry_data.velocity_x * telemetry_data.velocity_x +
+            telemetry_data.velocity_y * telemetry_data.velocity_y
+        );
         can_queue_velocity(DISP_SEND_RPM,
                         vel_mag,telemetry_data.rpms);
         can_queue_watts(DISP_SEND_POWER,
                         telemetry_data.throttle_raw);
-        vTaskDelayUntil(&last, pdMS_TO_TICKS(100));
+        vTaskDelayUntil(&last, pdMS_TO_TICKS(250));
     }
 }
 
@@ -320,6 +323,14 @@ void laptime_update_send_event_CAN(uint32_t laptime){
     
 }
 
+void weather_send_event_CAN(uint8_t precipitation, uint8_t humidity, uint8_t weather, uint8_t hour, float temp, int32_t visibility){
+    can_queue_weather_temp_vis(DISP_FETCHED_TEMP_VIS, temp, visibility); 
+    can_queue_weather_extra(DISP_FETCHED_WEATHER_02,
+                            precipitation,
+                            humidity,
+                            weather,
+                            hour);
+}
 
 void new_message_send_event_CAN(void){
     char msg_copy[CUSTOM_MSG_MAX_LEN + 1];

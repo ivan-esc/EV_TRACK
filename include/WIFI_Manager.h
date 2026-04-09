@@ -58,6 +58,7 @@ void WIFI_Connect(void);
 void poll_status_task(void *pvParameter);
 void poll_message_task(void *pvParameter);
 void fetch_weather_once(void);
+void weather_task(void *arg);
 
 typedef struct {
     char *buffer;

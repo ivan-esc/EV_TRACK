@@ -199,11 +199,11 @@ void kf_update_heading(Kalman2D *kf, float heading, float current, bool calibrat
 
     if (!calibrated)
     {
-        R = 2.0f;  // ignore if not calibrated
+        R = 5.0f;  // ignore if not calibrated
     }
     else if (fabs(current) > CURRENT_VALID_THRESHOLD)
     {
-        R = 2.0f;  // motor interference
+        R = 5.0f;  // motor interference
     }
     else
     {

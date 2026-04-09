@@ -73,13 +73,7 @@ void add_poi_send_event_CAN(uint8_t id, uint8_t color, double lat, double lon);
 void remove_poi_send_event_CAN(uint8_t id);
 void default_pois_send_event_CAN(void);
 
-void can_queue_weather_extra(uint32_t id,
-                             uint8_t precipitation,
-                             uint8_t humidity,
-                             uint8_t weather,
-                             uint8_t hour);
-void can_queue_weather_temp_vis(uint32_t id, float temp, int32_t visibility);
-
+void weather_send_event_CAN(uint8_t precipitation, uint8_t humidity, uint8_t weather, uint8_t hour, float temp, int32_t visibility);
 void new_message_send_event_CAN();
 
 //Frame structure struct
