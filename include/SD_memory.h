@@ -15,6 +15,7 @@ extern "C" {
 extern sdmmc_card_t *card;
 
 extern SemaphoreHandle_t sd_mutex;
+extern QueueHandle_t sd_queue;
 
 esp_err_t mount_sdcard(void);
 esp_err_t unmount_sdcard(void);
@@ -24,6 +25,7 @@ esp_err_t sd_append_telemetry_csv(const char *path, const TelemetryData *data);
 
 // RTOS tasks
 void SD_manager_task(void *);
+void telemetry_sample_task(void *arg);
 // void SD_append_data_task(void *);
 
 #ifdef __cplusplus

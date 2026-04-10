@@ -52,6 +52,7 @@ static int sd_write_telemetry_row(FILE *f, const TelemetryData *data)
     if (!f || !data) {
         return -1;
     }
+    // ESP_LOGI("SD", "Tick: %lu", xTaskGetTickCount());
 
     return fprintf(f,
         "%lu,%.3f,%.3f,%.8lf,%.8lf,"
@@ -214,6 +215,33 @@ esp_err_t sd_append_line(const char *path, const char *text)
  *
  * @param arg Unused.
  */
+
+void telemetry_sample_task(void *arg)
+{
+    TelemetryData *src = (TelemetryData *)arg;
+    TelemetryData sample;
+
+    TickType_t last_wake = xTaskGetTickCount();
+
+    while (1) {
+        // Copy shared telemetry safely
+        xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
+        sample = *src;
+        xSemaphoreGive(telemetry_mutex);
+
+        // Assign timestamp at sampling moment
+        sample.timestamp = telemetry_timestamp_ms();
+
+        // Send to queue (DO NOT BLOCK)
+        if (xQueueSend(sd_queue, &sample, 0) != pdTRUE) {
+            // Optional: drop or overwrite
+        }
+
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(100));
+    }
+}
+
+
 void SD_manager_task(void *arg){
     TelemetryData *telemetry_data = (TelemetryData *)arg;
     bool last_state = false;
@@ -251,23 +279,21 @@ void SD_manager_task(void *arg){
         }
 
         if (SD_card_detected && current_csv_path[0] != '\0') {
-            if (batch_count < SD_TELEMETRY_BATCH_SIZE) {
-                uint32_t sample_timestamp = telemetry_timestamp_ms();
-                xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
-                telemetry_batch[batch_count] = *telemetry_data;
-                telemetry_batch[batch_count].timestamp = sample_timestamp;
-                xSemaphoreGive(telemetry_mutex);
-                ++batch_count;
-            }
+            TelemetryData sample;
 
-            if (batch_count == SD_TELEMETRY_BATCH_SIZE) {
-                if (sd_append_telemetry_csv_batch(current_csv_path, telemetry_batch, batch_count) == ESP_OK) {
-                    batch_count = 0;
+            while (xQueueReceive(sd_queue, &sample, 0) == pdTRUE) {
+
+                telemetry_batch[batch_count++] = sample;
+
+                if (batch_count == SD_TELEMETRY_BATCH_SIZE) {
+                    if (sd_append_telemetry_csv_batch(current_csv_path, telemetry_batch, batch_count) == ESP_OK) {
+                        batch_count = 0;
+                    }
                 }
             }
         }
 
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SD_TELEMETRY_SAMPLE_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -292,10 +318,10 @@ esp_err_t sd_write_csv_header(const char *path)
     }
 
     const char *header =
-        "timestamp_ms,battery_voltage,current_amps,latitude,longitude,"
-        "accel_x,accel_y,accel_z,"
+        "Time,Battery Voltage,Battery Current,GPS Latitutde,GPS Longitude,"
+        "G Force Lat,G Force Long,G Force Vert,"
         "orient_x,orient_y,orient_z,"
-        "rpms,velocity_x,velocity_y,ambient_temp,altitude_m,num_sats,air_speed,throttle_raw";
+        "Engine RPM,velocity_x,velocity_y,ambient_temp,altitude_m,num_sats,air_speed,throttle_raw";
 
     FILE *f = fopen(path, "w");   // "w" creates/overwrites and writes header once
     if (!f) {
@@ -307,7 +333,7 @@ esp_err_t sd_write_csv_header(const char *path)
     fflush(f);
     fclose(f);
 
-    ESP_LOGI("SD", "CSV header written to %s", path);
+    // ESP_LOGI("SD", "CSV header written to %s", path);
     return ESP_OK;
 }
 

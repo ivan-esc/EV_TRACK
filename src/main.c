@@ -5,6 +5,7 @@ bool isRunning = false;
 
 // Kalman handlers 
 QueueHandle_t kf_queue;
+QueueHandle_t sd_queue = NULL;
 
 // Default telemetry data on start
 TelemetryData telemetry_data = {
@@ -53,6 +54,8 @@ void app_main(void)
     // Create CAN frame queue
     can_tx_queue = xQueueCreate(CAN_TX_QUEUE_LEN, sizeof(can_frame_t));
 
+    sd_queue = xQueueCreate(50, sizeof(TelemetryData));
+
     // Configuration 
     NVS_Init();
     Peripheral_Config();
@@ -65,7 +68,8 @@ void app_main(void)
 
     // Data acquisition 
     xTaskCreate(post_data, "post_data", 8192, &telemetry_data, 11, NULL);
-    xTaskCreate(SD_manager_task, "SD_manager", 8192, &telemetry_data, 5, NULL);
+    xTaskCreatePinnedToCore(telemetry_sample_task, "telemetry_sample", 4096, &telemetry_data, 13, NULL, 1);
+    xTaskCreate(SD_manager_task, "SD_manager", 8192, &telemetry_data, 6, NULL);
     xTaskCreate(poll_status_task, "poll_status_task", 4096, NULL, 4, NULL);
     xTaskCreate(poll_message_task, "poll_message_task", 4096, NULL, 4, NULL);
 
