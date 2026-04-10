@@ -654,7 +654,9 @@ void GPS_parse_task(void *arg)
             msg.type = KF_MEAS_GPS;
             msg.a = x;
             msg.b = y;
-            xQueueSendToBack(kf_queue, &msg, 0);
+            if (kf_queue != NULL) {
+                xQueueSendToBack(kf_queue, &msg, 0);
+            }
 
             /* -------- GPS VELOCITY + HEADING -------- */
             float vx, vy;
@@ -673,14 +675,18 @@ void GPS_parse_task(void *arg)
                 msg.type = KF_MEAS_GPS_VEL;
                 msg.a = vx;
                 msg.b = vy;
-                xQueueSendToBack(kf_queue, &msg, 0);
+                if (kf_queue != NULL) {
+                    xQueueSendToBack(kf_queue, &msg, 0);
+                }
 
                 /* HEADING */
                 float heading = atan2f(vy, vx);
 
                 msg.type = KF_MEAS_HEADING_GPS;
                 msg.a = heading;
-                xQueueSendToBack(kf_queue, &msg, 0);
+                if (kf_queue != NULL) {
+                    xQueueSendToBack(kf_queue, &msg, 0);
+                }                    
             }
         }
 

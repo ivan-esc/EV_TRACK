@@ -380,7 +380,9 @@ void foc_uart_test_task(void *arg)
                 msg.a = vx;
                 msg.b = vy;
 
-                xQueueSend(kf_queue, &msg, 0);
+                if (kf_queue != NULL) {
+                    xQueueSend(kf_queue, &msg, 0);
+                }
 
                 // ESP_LOGI("RPM_TRUST", "ON | thr=%d cur=%.2f rpm=%ld v=%.2f",
                 //     fast.throttle_raw, current_A, rpm, v);

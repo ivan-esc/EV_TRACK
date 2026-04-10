@@ -31,6 +31,7 @@ TelemetryData telemetry_data = {
 
 SemaphoreHandle_t telemetry_mutex;
 SemaphoreHandle_t i2c_mutex;
+SemaphoreHandle_t sd_mutex;
 
 
 void app_main(void)
@@ -44,6 +45,8 @@ void app_main(void)
     configASSERT(i2c_mutex);
     display_mutex = xSemaphoreCreateMutex();
     configASSERT(display_mutex);
+    sd_mutex = xSemaphoreCreateMutex();
+    configASSERT(sd_mutex);
     
     // Create Kalman queue (20 pending measurements max) 
     kf_queue = xQueueCreate(20, sizeof(kf_msg_t));
@@ -56,13 +59,13 @@ void app_main(void)
 
     // Communication 
     xTaskCreatePinnedToCore(foc_uart_test_task, "foc_uart_test_task", 4096, &telemetry_data, 6, NULL, 1);
-    xTaskCreatePinnedToCore(GPS_parse_task, "gps_parse", 4096, &telemetry_data, 10, NULL, 1);
+    xTaskCreatePinnedToCore(GPS_parse_task, "gps_parse", 4096, &telemetry_data, 9, NULL, 1);
     xTaskCreatePinnedToCore(pitot_task, "pitot_task", 4096, &telemetry_data, 5, NULL, 1);
     xTaskCreatePinnedToCore(can_tx_task, "can_tx_task", 4096, NULL, 3, NULL, 1);
 
     // Data acquisition 
     xTaskCreate(post_data, "post_data", 8192, &telemetry_data, 11, NULL);
-    xTaskCreate(SD_manager_task, "SD_manager", 4096, &telemetry_data, 15, NULL);
+    xTaskCreate(SD_manager_task, "SD_manager", 8192, &telemetry_data, 5, NULL);
     xTaskCreate(poll_status_task, "poll_status_task", 4096, NULL, 4, NULL);
     xTaskCreate(poll_message_task, "poll_message_task", 4096, NULL, 4, NULL);
 

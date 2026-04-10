@@ -173,7 +173,9 @@ static void bno055_task(void *arg)
             msg.type = KF_MEAS_ACCEL;
             msg.a = acc[0];
             msg.b = acc[1];
-            xQueueSend(kf_queue, &msg, 0);
+            if (kf_queue != NULL) {
+                xQueueSend(kf_queue, &msg, 0);
+            }
         }
 
         /* ---------- GYRO ---------- */
@@ -181,7 +183,9 @@ static void bno055_task(void *arg)
         {
             msg.type = KF_MEAS_GYRO;
             msg.a = gyro[2] * (M_PI / 180.0f);
-            xQueueSend(kf_queue, &msg, 0);
+            if (kf_queue != NULL) {
+                xQueueSend(kf_queue, &msg, 0);
+            }
         }
 
         /* ---------- HEADING ---------- */
@@ -254,7 +258,9 @@ static void bno055_task(void *arg)
             msg.a = theta_kf;
             msg.b = current;
             msg.c = reliable;
-            xQueueSend(kf_queue, &msg, 0);
+            if (kf_queue != NULL) {
+                xQueueSend(kf_queue, &msg, 0);
+            }
 
             /* -------- TELEMETRY -------- */
             xSemaphoreTake(telemetry_mutex, portMAX_DELAY);
